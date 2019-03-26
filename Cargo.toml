@@ -6,3 +6,4 @@ edition = "2018"
 description = "Transit serialization format support"
 
 [dependencies]
+serde_json = "1.0"

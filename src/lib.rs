@@ -1,3 +1,5 @@
+mod ser;
+
 #[cfg(test)]
 mod tests {
     #[test]
