@@ -1,0 +1,8 @@
+[package]
+name = "transit-rs"
+version = "0.1.0"
+authors = ["Evgeny Fomin <fevgenym@gmail.com>"]
+edition = "2018"
+description = "Transit serialization format support"
+
+[dependencies]
