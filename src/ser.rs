@@ -2,7 +2,7 @@ use serde_json::{json, map::Map as JsMap, Number as JsNum, Value as JsVal};
 use std::collections::BTreeMap;
 
 pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
-    v.transit_serialize(JsonSerializer {})
+    v.transit_serialize(JsonSerializer)
 }
 
 #[derive(PartialEq)]
@@ -14,7 +14,7 @@ pub enum TransitType {
 pub trait TransitSerialize: Clone {
     const TF_TYPE: TransitType;
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output;
-    fn transit_key(&self) -> Option<String>;
+    fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output>;
 }
 
 // impl TfSerializeKey for String {
@@ -71,7 +71,7 @@ impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for BTreeMap<K, 
         ser_map.end()
     }
 
-    fn transit_key(&self) -> Option<String> {
+    fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output> {
         None
     }
 }
@@ -83,8 +83,8 @@ impl TransitSerialize for i32 {
         serializer.serialize_int((*self).into())
     }
 
-    fn transit_key(&self) -> Option<String> {
-        Some(format!("~i{}", self))
+    fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output> {
+        Some(serializer.serialize_string(&format!("~i{}", self)))
     }
 }
 
@@ -95,8 +95,8 @@ impl TransitSerialize for String {
         serializer.serialize_string(self)
     }
 
-    fn transit_key(&self) -> Option<String> {
-        Some(self.clone())
+    fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output> {
+        Some(serializer.serialize_string(self))
     }
 }
 
@@ -107,8 +107,8 @@ impl TransitSerialize for &str {
         serializer.serialize_string(self)
     }
 
-    fn transit_key(&self) -> Option<String> {
-        Some(self.to_string())
+    fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output> {
+        Some(serializer.serialize_string(self))
     }
 }
 
@@ -149,7 +149,7 @@ pub struct JsonArraySerializer {
 }
 
 pub struct JsonMapSerializer {
-    buf_str_keys: Vec<Option<String>>,
+    buf_str_keys: Vec<Option<JsVal>>,
     buf_keys: Vec<JsVal>,
     buf_vals: Vec<JsVal>,
     cmap: bool,
@@ -160,10 +160,10 @@ impl SerializeMap for JsonMapSerializer {
 
     fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V) {
         self.cmap = self.cmap || (K::TF_TYPE == TransitType::Composite);
-        self.buf_keys.push(k.transit_serialize(JsonSerializer {}));
-        self.buf_vals.push(v.transit_serialize(JsonSerializer {}));
+        self.buf_keys.push(k.transit_serialize(JsonSerializer));
+        self.buf_vals.push(v.transit_serialize(JsonSerializer));
         // FIXME: compute cmap in the beginning and do not compute this vector if not needed
-        self.buf_str_keys.push(k.transit_key());
+        self.buf_str_keys.push(k.transit_key(JsonSerializer));
     }
 
     fn end(self) -> Self::Output {
@@ -179,7 +179,11 @@ impl SerializeMap for JsonMapSerializer {
         } else {
             let mut map = JsMap::with_capacity(self.buf_keys.len());
             for (k, v) in self.buf_str_keys.into_iter().zip(self.buf_vals.into_iter()) {
-                map.insert(k.expect("Dubg shit"), v);
+                if let JsVal::String(key) = k.expect("Dubg shit") {
+                    map.insert(key, v);
+                } else {
+                    unimplemented!();
+                }
             }
             JsVal::Object(map)
         }
@@ -189,7 +193,7 @@ impl SerializeMap for JsonMapSerializer {
 impl SerializeArray for JsonArraySerializer {
     type Output = JsVal;
     fn serialize_item<T: TransitSerialize>(&mut self, v: T) {
-        self.buf.push(v.transit_serialize(JsonSerializer {}));
+        self.buf.push(v.transit_serialize(JsonSerializer));
     }
 
     fn end(self) -> Self::Output {
@@ -197,7 +201,7 @@ impl SerializeArray for JsonArraySerializer {
     }
 }
 
-struct JsonSerializer {}
+struct JsonSerializer;
 
 impl TransitSerializer for JsonSerializer {
     type Output = JsVal;
