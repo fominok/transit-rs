@@ -1,8 +1,8 @@
-use serde_json::{json, map::Map as JsMap, Number as JsNum, Value as JsVal};
+use serde_json::{map::Map as JsMap, Value as JsVal};
 use std::collections::BTreeMap;
 
 pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
-    v.transit_serialize(JsonSerializer)
+    v.transit_serialize(JsonSerializer::top())
 }
 
 #[derive(PartialEq)]
@@ -11,54 +11,29 @@ pub enum TransitType {
     Composite,
 }
 
+// FIXME: remove Clone
 pub trait TransitSerialize: Clone {
     const TF_TYPE: TransitType;
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output;
     fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output>;
 }
 
-// impl TfSerializeKey for String {
-//     fn serialize_key(&self) -> String {
-//         self.clone()
-//     }
-// }
+impl TransitSerialize for bool {
+    const TF_TYPE: TransitType = TransitType::Scalar;
+    fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
+        serializer.serialize_bool(*self)
+    }
 
-// impl TfSerializeKey for bool {
-//     fn serialize_key(&self) -> String {
-//         if *self {
-//             "~?t".to_owned()
-//         } else {
-//             "~?f".to_owned()
-//         }
-//     }
-// }
+    fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output> {
+        let s = if *self {
+            "~?t".to_owned()
+        } else {
+            "~?f".to_owned()
+        };
 
-// impl TfSerializeKey for i32 {
-//     fn serialize_key(&self) -> String {
-//         format!("~i{}", self)
-//     }
-// }
-// impl TfSerializeKey for i64 {
-//     fn serialize_key(&self) -> String {
-//         format!("~i{}", self)
-//     }
-// }
-// impl TfSerializeKey for u32 {
-//     fn serialize_key(&self) -> String {
-//         format!("~i{}", self)
-//     }
-// }
-
-// impl TfSerializeKey for f32 {
-//     fn serialize_key(&self) -> String {
-//         format!("~d{}", self)
-//     }
-// }
-// impl TfSerializeKey for f64 {
-//     fn serialize_key(&self) -> String {
-//         format!("~d{}", self)
-//     }
-// }
+        Some(serializer.serialize_string(&s))
+    }
+}
 
 impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for BTreeMap<K, V> {
     const TF_TYPE: TransitType = TransitType::Composite;
@@ -71,7 +46,7 @@ impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for BTreeMap<K, 
         ser_map.end()
     }
 
-    fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output> {
+    fn transit_key<S: TransitSerializer>(&self, _serializer: S) -> Option<S::Output> {
         None
     }
 }
@@ -160,10 +135,13 @@ impl SerializeMap for JsonMapSerializer {
 
     fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V) {
         self.cmap = self.cmap || (K::TF_TYPE == TransitType::Composite);
-        self.buf_keys.push(k.transit_serialize(JsonSerializer));
-        self.buf_vals.push(v.transit_serialize(JsonSerializer));
+        self.buf_keys
+            .push(k.transit_serialize(JsonSerializer::default()));
+        self.buf_vals
+            .push(v.transit_serialize(JsonSerializer::default()));
         // FIXME: compute cmap in the beginning and do not compute this vector if not needed
-        self.buf_str_keys.push(k.transit_key(JsonSerializer));
+        self.buf_str_keys
+            .push(k.transit_key(JsonSerializer::default()));
     }
 
     fn end(self) -> Self::Output {
@@ -193,7 +171,8 @@ impl SerializeMap for JsonMapSerializer {
 impl SerializeArray for JsonArraySerializer {
     type Output = JsVal;
     fn serialize_item<T: TransitSerialize>(&mut self, v: T) {
-        self.buf.push(v.transit_serialize(JsonSerializer));
+        self.buf
+            .push(v.transit_serialize(JsonSerializer::default()));
     }
 
     fn end(self) -> Self::Output {
@@ -201,7 +180,31 @@ impl SerializeArray for JsonArraySerializer {
     }
 }
 
-struct JsonSerializer;
+struct JsonSerializer {
+    top_level: bool,
+}
+
+impl Default for JsonSerializer {
+    fn default() -> Self {
+        JsonSerializer { top_level: false }
+    }
+}
+
+impl JsonSerializer {
+    fn top() -> Self {
+        JsonSerializer { top_level: true }
+    }
+
+    fn quote_check(self, v: JsVal) -> JsVal {
+        if self.top_level {
+            let mut m = JsMap::with_capacity(1);
+            m.insert("~#".to_owned(), v);
+            JsVal::Object(m)
+        } else {
+            v
+        }
+    }
+}
 
 impl TransitSerializer for JsonSerializer {
     type Output = JsVal;
@@ -209,23 +212,23 @@ impl TransitSerializer for JsonSerializer {
     type SerializeMap = JsonMapSerializer;
 
     fn serialize_null(self) -> Self::Output {
-        JsVal::Null
+        self.quote_check(JsVal::Null)
     }
 
     fn serialize_string(self, v: &str) -> Self::Output {
-        v.into()
+        self.quote_check(v.into())
     }
 
     fn serialize_bool(self, v: bool) -> Self::Output {
-        v.into()
+        self.quote_check(v.into())
     }
 
     fn serialize_int(self, v: i64) -> Self::Output {
-        v.into()
+        self.quote_check(v.into())
     }
 
     fn serialize_float(self, v: f64) -> Self::Output {
-        v.into()
+        self.quote_check(v.into())
     }
 
     fn serialize_array(self, len: Option<usize>) -> Self::SerializeArray {
@@ -260,6 +263,7 @@ impl TransitSerializer for JsonSerializer {
 #[cfg(test)]
 mod test {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn scalar_map_btree() {
@@ -279,9 +283,9 @@ mod test {
 
     #[test]
     fn map_composite_keys() {
-        let mut key1: BTreeMap<i32, &str> = BTreeMap::new();
-        key1.insert(4, "test");
-        key1.insert(5, "tset");
+        let mut key1: BTreeMap<bool, &str> = BTreeMap::new();
+        key1.insert(true, "test");
+        key1.insert(false, "tset");
 
         let mut m = BTreeMap::new();
         m.insert(key1, 1337);
@@ -291,11 +295,22 @@ mod test {
             json!({
                 "~#cmap": [
                     {
-                        "~i4": "test",
-                        "~i5": "tset",
+                        "~?t": "test",
+                        "~?f": "tset",
                     },
                     1337
                 ],
+            }),
+            tr
+        );
+    }
+
+    #[test]
+    fn test_quote() {
+        let tr = to_transit_json(5i32);
+        assert_eq!(
+            json!({
+                "~#": 5
             }),
             tr
         );
