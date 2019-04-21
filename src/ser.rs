@@ -18,8 +18,33 @@ pub trait TransitSerialize: Clone {
     fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output>;
 }
 
+impl<T: TransitSerialize + ?Sized> TransitSerialize for Box<T> {
+    const TF_TYPE: TransitType = T::TF_TYPE;
+
+    fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
+        (**self).transit_serialize(serializer)
+    }
+
+    fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output> {
+        (**self).transit_key(serializer)
+    }
+}
+
+impl<'a, T: TransitSerialize + ?Sized> TransitSerialize for &'a T {
+    const TF_TYPE: TransitType = T::TF_TYPE;
+
+    fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
+        (**self).transit_serialize(serializer)
+    }
+
+    fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output> {
+        (**self).transit_key(serializer)
+    }
+}
+
 impl TransitSerialize for bool {
     const TF_TYPE: TransitType = TransitType::Scalar;
+
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
         serializer.serialize_bool(*self)
     }
@@ -44,6 +69,22 @@ impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for BTreeMap<K, 
             ser_map.serialize_pair((*k).clone(), (*v).clone());
         }
         ser_map.end()
+    }
+
+    fn transit_key<S: TransitSerializer>(&self, _serializer: S) -> Option<S::Output> {
+        None
+    }
+}
+
+impl<T: TransitSerialize> TransitSerialize for Vec<T> {
+    const TF_TYPE: TransitType = TransitType::Composite;
+
+    fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
+        let mut ser_arr = serializer.serialize_array(Some(self.len()));
+        for v in self.iter() {
+            ser_arr.serialize_item((*v).clone());
+        }
+        ser_arr.end()
     }
 
     fn transit_key<S: TransitSerializer>(&self, _serializer: S) -> Option<S::Output> {
@@ -306,12 +347,38 @@ mod test {
     }
 
     #[test]
-    fn test_quote() {
+    fn quoting() {
         let tr = to_transit_json(5i32);
         assert_eq!(
             json!({
                 "~#": 5
             }),
+            tr
+        );
+    }
+
+    #[test]
+    fn array() {
+        let mut m1 = BTreeMap::new();
+        let mut m2 = BTreeMap::new();
+        m1.insert("test", true);
+        m1.insert("hih", true);
+        m2.insert("ok", true);
+        m2.insert("not ok", false);
+        let v = vec![Box::new(m1), Box::new(m2)];
+
+        let tr = to_transit_json(v);
+        assert_eq!(
+            json!([
+                 {
+                     "test": true,
+                     "hih": true
+                 },
+                 {
+                     "ok": true,
+                     "not ok": false
+                 }
+            ]),
             tr
         );
     }
