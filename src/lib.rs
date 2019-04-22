@@ -1,4 +1,5 @@
 pub mod ser;
+pub mod de;
 
 #[cfg(test)]
 mod tests {
