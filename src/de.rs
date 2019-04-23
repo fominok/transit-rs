@@ -1,17 +1,48 @@
-use serde_json::{map::Map as JsMap, Value as JsVal};
+use serde_json::{
+    map::{IntoIter as JsMapIntoIter, Map as JsMap},
+    Value as JsVal,
+};
 use std::collections::BTreeMap;
 
-trait TransitDeserializer {}
+enum Error {
+    DoNotMatch(String),
+}
+
+type TResult<T> = Result<T, Error>;
 
 trait TransitDeserialize {
     fn transit_deserialize<D: TransitDeserializer>(deserializer: D) -> Self;
 }
 
+trait TransitDeserializer {
+    type MapVisitor: Iterator;
+
+    fn visit_map(self) -> TResult<Self::MapVisitor>;
+}
+
+trait MapVisitor {}
+
 struct JsonDeserializer {
     input: JsVal,
 }
 
-impl TransitDeserializer for JsonDeserializer {}
+struct JsonMapVisitor {
+    input: JsMap<String, JsVal>,
+}
+
+impl MapVisitor for JsonMapVisitor {}
+
+impl TransitDeserializer for JsonDeserializer {
+    type MapVisitor = JsMapIntoIter;
+
+    fn visit_map(self) -> TResult<Self::MapVisitor> {
+        if let JsVal::Object(m) = self.input {
+            Ok(m.into_iter())
+        } else {
+            Err(Error::DoNotMatch(format!("{} is not a map", self.input)))
+        }
+    }
+}
 
 impl<K, V> TransitDeserialize for BTreeMap<K, V> {
     fn transit_deserialize<D: TransitDeserializer>(deserializer: D) -> Self {
