@@ -119,21 +119,51 @@ where
         input: D::Input,
     ) -> TResult<Self> {
         let map_iter = deserializer.clone().deserialize_map(input)?;
-        let mut m = BTreeMap::new();
-        for (k, v) in map_iter {
-            m.insert(
-                TransitDeserialize::transit_deserialize_key(deserializer.clone(), k)?,
-                TransitDeserialize::transit_deserialize(deserializer.clone(), v)?,
-            );
+        let mut result: Self = BTreeMap::new();
+        match K::TF_TYPE {
+            TransitType::Scalar => {
+                for (k, v) in map_iter {
+                    result.insert(
+                        TransitDeserialize::transit_deserialize_key(deserializer.clone(), k)?,
+                        TransitDeserialize::transit_deserialize(deserializer.clone(), v)?,
+                    );
+                }
+                Ok(result)
+            }
+            TransitType::Composite => {
+                if let Some((k, v)) = map_iter.into_iter().next() {
+                    let k_str = deserializer.clone().deserialize_string(k)?;
+                    if k_str == "~#cmap" {
+                        Ok(())
+                    } else {
+                        Err(Error::DoNotMatch(format!("{:?} must be ~#cmap", k_str)))
+                    }?;
+                    let vals = deserializer.clone().deserialize_array(v)?;
+                    for c in vals.into_iter().collect::<Vec<D::Input>>().chunks(2) {
+                        result.insert(
+                            TransitDeserialize::transit_deserialize(
+                                deserializer.clone(),
+                                c[0].clone(),
+                            )?,
+                            TransitDeserialize::transit_deserialize(
+                                deserializer.clone(),
+                                c[1].clone(),
+                            )?,
+                        );
+                    }
+                }
+                Ok(result)
+            }
         }
-        Ok(m)
     }
 
     fn transit_deserialize_key<D: TransitDeserializer>(
         deserializer: D,
         input: D::Input,
     ) -> TResult<Self> {
-        Err(Error::CannotBeKey("Vec<T> cannot be deserialized as key"))
+        Err(Error::CannotBeKey(
+            "BTreeMap<K, V> cannot be deserialized as key",
+        ))
     }
 }
 
@@ -160,6 +190,29 @@ impl<T: TransitDeserialize> TransitDeserialize for Vec<T> {
         input: D::Input,
     ) -> TResult<Self> {
         Err(Error::CannotBeKey("Vec<T> cannot be deserialized as key"))
+    }
+}
+
+impl TransitDeserialize for bool {
+    const TF_TYPE: TransitType = TransitType::Scalar;
+
+    fn transit_deserialize<D: TransitDeserializer>(
+        deserializer: D,
+        input: D::Input,
+    ) -> TResult<Self> {
+        deserializer.deserialize_bool(input)
+    }
+
+    fn transit_deserialize_key<D: TransitDeserializer>(
+        deserializer: D,
+        input: D::Input,
+    ) -> TResult<Self> {
+        let s = deserializer.deserialize_string(input.clone())?;
+        match s.as_ref() {
+            "~?t" => Ok(true),
+            "~?f" => Ok(false),
+            _ => Err(Error::DoNotMatch(format!("{} is wrong bool key", s))),
+        }
     }
 }
 
@@ -252,5 +305,27 @@ mod test {
         }))
         .unwrap();
         assert_eq!(m, tr);
+    }
+
+    #[test]
+    fn map_composite_keys() {
+        let mut key1: BTreeMap<bool, String> = BTreeMap::new();
+        key1.insert(true, "test".to_owned());
+        key1.insert(false, "tset".to_owned());
+
+        let mut m = BTreeMap::new();
+        m.insert(key1, 1337);
+
+        let tr: BTreeMap<BTreeMap<bool, String>, i32> = from_transit_json(json!({
+            "~#cmap": [
+                {
+                    "~?t": "test",
+                    "~?f": "tset",
+                },
+                1337
+            ],
+        }))
+        .unwrap();
+        assert_eq!(tr, m);
     }
 }
