@@ -4,6 +4,7 @@ use serde_json::{
     map::{IntoIter as JsMapIntoIter, Map as JsMap},
     Value as JsVal,
 };
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::Debug;
 
@@ -22,45 +23,6 @@ pub enum TransitType {
     Composite,
 }
 
-/*// FIXME: remove Clone
-pub trait TransitSerialize: Clone {
-    const TF_TYPE: TransitType;
-    fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output;
-    fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output>;
-}
-
-/// Trait for creation of final representation
-/// because Transit is generic over JSON and MessagePack (both Verbose and not)
-pub trait TransitSerializer {
-    type Output;
-    type SerializeArray: SerializeArray<Output = Self::Output>;
-    type SerializeMap: SerializeMap<Output = Self::Output>;
-
-    fn serialize_null(self) -> Self::Output;
-    fn serialize_string(self, v: &str) -> Self::Output;
-    fn serialize_bool(self, v: bool) -> Self::Output;
-    fn serialize_int(self, v: i64) -> Self::Output;
-    fn serialize_float(self, v: f64) -> Self::Output;
-    fn serialize_array(self, len: Option<usize>) -> Self::SerializeArray;
-    fn serialize_map(self, len: Option<usize>) -> Self::SerializeMap;
-}
-
-/// Array-specific serialization
-pub trait SerializeArray {
-    type Output;
-
-    fn serialize_item<T: TransitSerialize>(&mut self, v: T);
-    fn end(self) -> Self::Output;
-}
-
-/// Map-specific serialization
-pub trait SerializeMap {
-    type Output;
-
-    fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V);
-    fn end(self) -> Self::Output;
-}*/
-
 pub trait TransitDeserialize: Sized {
     const TF_TYPE: TransitType;
 
@@ -78,7 +40,7 @@ pub trait TransitDeserialize: Sized {
 pub trait TransitDeserializer: Clone + Debug {
     type Input: Debug + Clone;
     type DeserializeArray: IntoIterator<Item = Self::Input>;
-    type DeserializeMap;
+    type DeserializeMap: IntoIterator<Item = (Self::Input, Self::Input)>;
 
     //fn deserialize_null(self, v: Self::Input) -> Self::Output;
     fn deserialize_string(self, v: Self::Input) -> TResult<String>;
@@ -89,13 +51,25 @@ pub trait TransitDeserializer: Clone + Debug {
     fn deserialize_map(self, v: Self::Input) -> TResult<Self::DeserializeMap>;
 }
 
+struct JsonObjectIntoIter {
+    js_iter: JsMapIntoIter,
+}
+
+impl Iterator for JsonObjectIntoIter {
+    type Item = (JsVal, JsVal);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.js_iter.next().map(|(k, v)| (JsVal::String(k), v))
+    }
+}
+
 #[derive(Clone, Debug)]
 struct JsonDeserializer;
 
 impl TransitDeserializer for JsonDeserializer {
     type Input = JsVal;
     type DeserializeArray = std::vec::IntoIter<JsVal>;
-    type DeserializeMap = i32;
+    type DeserializeMap = JsonObjectIntoIter;
 
     fn deserialize_string(self, v: Self::Input) -> TResult<String> {
         v.as_str()
@@ -121,29 +95,48 @@ impl TransitDeserializer for JsonDeserializer {
     fn deserialize_array(self, v: Self::Input) -> TResult<Self::DeserializeArray> {
         v.as_array()
             .map(|x| x.clone().into_iter())
-            .ok_or(Error::DoNotMatch(format!("{} is not array", v)))
+            .ok_or(Error::DoNotMatch(format!("{} is not an array", v)))
     }
 
     fn deserialize_map(self, v: Self::Input) -> TResult<Self::DeserializeMap> {
-        unimplemented!()
+        v.as_object()
+            .map(|x| JsonObjectIntoIter {
+                js_iter: x.clone().into_iter(),
+            })
+            .ok_or(Error::DoNotMatch(format!("{} is not a map", v)))
     }
-
-    // fn visit_map(self) -> TResult<Self::MapVisitor> {
-    //     if let JsVal::Object(m) = self.input {
-    //         Ok(m.into_iter())
-    //     } else {
-    //         Err(Error::DoNotMatch(format!("{} is not a map", self.input)))
-    //     }
-    // }
 }
 
-// impl<K, V> TransitDeserialize for BTreeMap<K, V> {
-//     fn transit_deserialize<D: TransitDeserializer>(deserializer: D) -> TResult<Self> {
-//         let visitor = deserializer.visit_map()?;
-//         unimplemented!()
-//     }
-// }
-//
+impl<K, V> TransitDeserialize for BTreeMap<K, V>
+where
+    K: TransitDeserialize + Ord,
+    V: TransitDeserialize,
+{
+    const TF_TYPE: TransitType = TransitType::Composite;
+
+    fn transit_deserialize<D: TransitDeserializer>(
+        deserializer: D,
+        input: D::Input,
+    ) -> TResult<Self> {
+        let map_iter = deserializer.clone().deserialize_map(input)?;
+        let mut m = BTreeMap::new();
+        for (k, v) in map_iter {
+            m.insert(
+                TransitDeserialize::transit_deserialize_key(deserializer.clone(), k)?,
+                TransitDeserialize::transit_deserialize(deserializer.clone(), v)?,
+            );
+        }
+        Ok(m)
+    }
+
+    fn transit_deserialize_key<D: TransitDeserializer>(
+        deserializer: D,
+        input: D::Input,
+    ) -> TResult<Self> {
+        Err(Error::CannotBeKey("Vec<T> cannot be deserialized as key"))
+    }
+}
+
 impl<T: TransitDeserialize> TransitDeserialize for Vec<T> {
     const TF_TYPE: TransitType = TransitType::Composite;
 
@@ -196,12 +189,34 @@ impl TransitDeserialize for i32 {
             )))
             .and_then(|cap| {
                 cap.name("int")
-                    .ok_or(Error::DoNotMatch(format!("{:?} is not proper i32 key", input)))
+                    .ok_or(Error::DoNotMatch(format!(
+                        "{:?} is not proper i32 key",
+                        input
+                    )))
                     .and_then(|i| {
-                        (i.as_str()).parse::<Self>()
+                        (i.as_str())
+                            .parse::<Self>()
                             .map_err(|_| Error::DoNotMatch(format!("{:?} is not i32", input)))
                     })
             })
+    }
+}
+
+impl TransitDeserialize for String {
+    const TF_TYPE: TransitType = TransitType::Scalar;
+
+    fn transit_deserialize<D: TransitDeserializer>(
+        deserializer: D,
+        input: D::Input,
+    ) -> TResult<Self> {
+        deserializer.deserialize_string(input).map(|x| x.to_owned())
+    }
+
+    fn transit_deserialize_key<D: TransitDeserializer>(
+        deserializer: D,
+        input: D::Input,
+    ) -> TResult<Self> {
+        deserializer.deserialize_string(input).map(|x| x.to_owned())
     }
 }
 
@@ -225,16 +240,17 @@ mod test {
     // TODO: Quoting
     // Check that something like 5 cannot be parsed on top level
 
-    // #[test]
-    // fn scalar_map_btree() {
-    //     let mut m = BTreeMap::new();
-    //     m.insert(4, "yolo");
-    //     m.insert(-6, "swag");
+    #[test]
+    fn scalar_map_btree() {
+        let mut m = BTreeMap::new();
+        m.insert(4, "yolo".to_owned());
+        m.insert(-6, "swag".to_owned());
 
-    //     let tr = from_transit_json(json!({
-    //         "~i4": "yolo",
-    //         "~i-6": "swag"
-    //     })).unwrap();
-    //     assert_eq!(m, tr);
-    // }
+        let tr = from_transit_json(json!({
+            "~i4": "yolo",
+            "~i-6": "swag"
+        }))
+        .unwrap();
+        assert_eq!(m, tr);
+    }
 }
