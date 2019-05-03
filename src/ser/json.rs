@@ -27,7 +27,7 @@ impl SerializeMap for JsonMapSerializer {
             .push(v.transit_serialize(JsonSerializer::default()));
         // FIXME: compute cmap in the beginning and do not compute this vector if not needed
         self.buf_str_keys
-            .push(k.transit_key(JsonSerializer::default()));
+            .push(k.transit_serialize_key(JsonSerializer::default()));
     }
 
     fn end(self) -> Self::Output {

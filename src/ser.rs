@@ -11,7 +11,7 @@ pub enum TransitType {
 pub trait TransitSerialize: Clone {
     const TF_TYPE: TransitType;
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output;
-    fn transit_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output>;
+    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output>;
 }
 
 /// Trait for creation of final representation

@@ -1,15 +1,17 @@
+use lazy_static::lazy_static;
+use regex::Regex;
 use serde_json::{
     map::{IntoIter as JsMapIntoIter, Map as JsMap},
     Value as JsVal,
 };
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::Debug;
 
 #[derive(Debug)]
-enum Error {
+pub enum Error {
     DoNotMatch(String),
     ItWontFit(String),
+    CannotBeKey(&'static str),
 }
 
 type TResult<T> = Result<T, Error>;
@@ -59,15 +61,22 @@ pub trait SerializeMap {
     fn end(self) -> Self::Output;
 }*/
 
-trait TransitDeserialize: Sized {
+pub trait TransitDeserialize: Sized {
+    const TF_TYPE: TransitType;
+
     fn transit_deserialize<D: TransitDeserializer>(
+        deserializer: D,
+        input: D::Input,
+    ) -> TResult<Self>;
+
+    fn transit_deserialize_key<D: TransitDeserializer>(
         deserializer: D,
         input: D::Input,
     ) -> TResult<Self>;
 }
 
-trait TransitDeserializer: Clone + Debug {
-    type Input: Debug;
+pub trait TransitDeserializer: Clone + Debug {
+    type Input: Debug + Clone;
     type DeserializeArray: IntoIterator<Item = Self::Input>;
     type DeserializeMap;
 
@@ -136,6 +145,8 @@ impl TransitDeserializer for JsonDeserializer {
 // }
 //
 impl<T: TransitDeserialize> TransitDeserialize for Vec<T> {
+    const TF_TYPE: TransitType = TransitType::Composite;
+
     fn transit_deserialize<D: TransitDeserializer>(
         deserializer: D,
         input: D::Input,
@@ -150,9 +161,18 @@ impl<T: TransitDeserialize> TransitDeserialize for Vec<T> {
         }
         Ok(v)
     }
+
+    fn transit_deserialize_key<D: TransitDeserializer>(
+        deserializer: D,
+        input: D::Input,
+    ) -> TResult<Self> {
+        Err(Error::CannotBeKey("Vec<T> cannot be deserialized as key"))
+    }
 }
 
 impl TransitDeserialize for i32 {
+    const TF_TYPE: TransitType = TransitType::Scalar;
+
     fn transit_deserialize<D: TransitDeserializer>(
         deserializer: D,
         input: D::Input,
@@ -160,9 +180,32 @@ impl TransitDeserialize for i32 {
         Self::try_from(deserializer.deserialize_int(input)?)
             .map_err(|_| Error::ItWontFit(format!("Cannot fit in i32")))
     }
+
+    fn transit_deserialize_key<D: TransitDeserializer>(
+        deserializer: D,
+        input: D::Input,
+    ) -> TResult<Self> {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"~i(?P<int>-?\d+)").unwrap();
+        }
+        let s = deserializer.deserialize_string(input.clone())?;
+        RE.captures(&s)
+            .ok_or(Error::DoNotMatch(format!(
+                "{:?} is not proper i32 key",
+                input
+            )))
+            .and_then(|cap| {
+                cap.name("int")
+                    .ok_or(Error::DoNotMatch(format!("{:?} is not proper i32 key", input)))
+                    .and_then(|i| {
+                        (i.as_str()).parse::<Self>()
+                            .map_err(|_| Error::DoNotMatch(format!("{:?} is not i32", input)))
+                    })
+            })
+    }
 }
 
-fn from_transit_json<T: TransitDeserialize>(v: JsVal) -> TResult<T> {
+pub fn from_transit_json<T: TransitDeserialize>(v: JsVal) -> TResult<T> {
     TransitDeserialize::transit_deserialize(JsonDeserializer, v)
 }
 
@@ -174,10 +217,13 @@ mod test {
 
     #[test]
     fn dumb_array() {
-        let mut v = vec![1, 2, 3];
+        let v = vec![1, 2, 3];
         let tr: Vec<i32> = from_transit_json(json!([1, 2, 3])).unwrap();
         assert_eq!(v, tr);
     }
+
+    // TODO: Quoting
+    // Check that something like 5 cannot be parsed on top level
 
     // #[test]
     // fn scalar_map_btree() {
@@ -188,7 +234,7 @@ mod test {
     //     let tr = from_transit_json(json!({
     //         "~i4": "yolo",
     //         "~i-6": "swag"
-    //     }));
+    //     })).unwrap();
     //     assert_eq!(m, tr);
     // }
 }
