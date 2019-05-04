@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate criterion;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use criterion::black_box;
 use criterion::Criterion;
@@ -19,9 +19,10 @@ fn serialize_benchmark(c: &mut Criterion) {
                 m.insert(key1, i);
             }
 
-            b.iter(|| ser::json::to_transit_json(&m))
+            b.iter(|| ser::json_verbose::to_transit_json(&m))
         },
-        (500..10000).step_by(500),
+        //(500..10000).step_by(500),
+        (500..501).step_by(500),
     );
 }
 
@@ -29,7 +30,7 @@ fn deserialize_benchmark(c: &mut Criterion) {
     c.bench_function_over_inputs(
         "composite keys deserialize",
         |b, size| {
-            let mut m = BTreeMap::new();
+            let mut m = HashMap::new();
             for i in 0..*size {
                 let mut key1: BTreeMap<bool, String> = BTreeMap::new();
                 key1.insert(true, "test".to_owned());
@@ -37,11 +38,13 @@ fn deserialize_benchmark(c: &mut Criterion) {
 
                 m.insert(key1, i);
             }
-            let tr = ser::json::to_transit_json(m);
+            let tr = ser::json_verbose::to_transit_json(m);
 
-            b.iter(|| de::from_transit_json::<BTreeMap<BTreeMap<bool, String>, i32>>(tr.clone()))
+            b.iter(|| de::from_transit_json::<HashMap<BTreeMap<bool, String>, i32>>(tr.clone()))
         },
-        (500..10000).step_by(500),
+        //(500..10000).step_by(500),
+        //(500..501).step_by(500),
+        (9500..9501).step_by(500),
     );
 }
 

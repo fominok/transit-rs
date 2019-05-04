@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 impl<T: TransitSerialize + ?Sized> TransitSerialize for Box<T> {
     const TF_TYPE: TransitType = T::TF_TYPE;
@@ -44,6 +44,22 @@ impl TransitSerialize for bool {
 }
 
 impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for BTreeMap<K, V> {
+    const TF_TYPE: TransitType = TransitType::Composite;
+
+    fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
+        let mut ser_map = serializer.serialize_map(Some(self.len()));
+        for (k, v) in self.iter() {
+            ser_map.serialize_pair((*k).clone(), (*v).clone());
+        }
+        ser_map.end()
+    }
+
+    fn transit_serialize_key<S: TransitSerializer>(&self, _serializer: S) -> Option<S::Output> {
+        None
+    }
+}
+
+impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for HashMap<K, V> {
     const TF_TYPE: TransitType = TransitType::Composite;
 
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
