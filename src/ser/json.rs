@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::{map::Map as JsMap, Value as JsVal};
+use serde_json::{Value as JsVal};
 
 pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
     v.transit_serialize(JsonSerializer::top())
@@ -14,6 +14,21 @@ pub struct JsonMapSerializer {
     buf_keys: Vec<JsVal>,
     buf_vals: Vec<JsVal>,
     cmap: bool,
+}
+
+pub struct JsonTagSerializer {
+    tag: String,
+}
+
+impl SerializeTag for JsonTagSerializer {
+    type Output = JsVal;
+
+    fn serialize_value(&mut self, v: Self::Output) -> Self::Output {
+        let mut vec = Vec::with_capacity(2);
+        vec.push(JsVal::String(self.tag.clone()));
+        vec.push(v);
+        JsVal::Array(vec)
+    }
 }
 
 impl SerializeMap for JsonMapSerializer {
@@ -65,6 +80,7 @@ impl SerializeArray for JsonArraySerializer {
     }
 }
 
+#[derive(Clone)]
 struct JsonSerializer {
     top_level: bool,
 }
@@ -96,6 +112,7 @@ impl TransitSerializer for JsonSerializer {
     type Output = JsVal;
     type SerializeArray = JsonArraySerializer;
     type SerializeMap = JsonMapSerializer;
+    type SerializeTag = JsonTagSerializer;
 
     fn serialize_null(self) -> Self::Output {
         self.quote_check(JsVal::Null)
@@ -144,13 +161,19 @@ impl TransitSerializer for JsonSerializer {
             }
         }
     }
+
+    fn serialize_tagged(self, tag: &str) -> Self::SerializeTag {
+        JsonTagSerializer {
+            tag: tag.to_owned(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use serde_json::json;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
     #[test]
     fn scalar_map_btree() {
@@ -182,6 +205,17 @@ mod test {
     fn quoting() {
         let tr = to_transit_json(5i32);
         assert_eq!(json!(["~#", 5]), tr);
+    }
+
+    #[test]
+    fn tagged_set() {
+        let mut hs = BTreeSet::new();
+        hs.insert(0);
+        hs.insert(2);
+        hs.insert(4);
+
+        let tr = to_transit_json(hs);
+        assert_eq!(json!(["~#set", [0, 2, 4]]), tr);
     }
 
     #[test]

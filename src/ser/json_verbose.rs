@@ -16,6 +16,20 @@ pub struct JsonMapSerializer {
     cmap: bool,
 }
 
+pub struct JsonVerboseTagSerializer {
+    tag: String,
+}
+
+impl SerializeTag for JsonVerboseTagSerializer {
+    type Output = JsVal;
+
+    fn serialize_value(&mut self, v: Self::Output) -> Self::Output {
+        let mut m = JsMap::with_capacity(1);
+        m.insert(self.tag.clone(), v);
+        JsVal::Object(m)
+    }
+}
+
 impl SerializeMap for JsonMapSerializer {
     type Output = JsVal;
 
@@ -66,6 +80,7 @@ impl SerializeArray for JsonArraySerializer {
     }
 }
 
+#[derive(Clone)]
 struct JsonSerializer {
     top_level: bool,
 }
@@ -96,6 +111,7 @@ impl TransitSerializer for JsonSerializer {
     type Output = JsVal;
     type SerializeArray = JsonArraySerializer;
     type SerializeMap = JsonMapSerializer;
+    type SerializeTag = JsonVerboseTagSerializer;
 
     fn serialize_null(self) -> Self::Output {
         self.quote_check(JsVal::Null)
@@ -144,13 +160,19 @@ impl TransitSerializer for JsonSerializer {
             }
         }
     }
+
+    fn serialize_tagged(self, tag: &str) -> Self::SerializeTag {
+        JsonVerboseTagSerializer {
+            tag: tag.to_owned(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use serde_json::json;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
     #[test]
     fn scalar_map_btree() {
@@ -201,6 +223,17 @@ mod test {
             }),
             tr
         );
+    }
+
+    #[test]
+    fn tagged_set() {
+        let mut hs = BTreeSet::new();
+        hs.insert(0);
+        hs.insert(2);
+        hs.insert(4);
+
+        let tr = to_transit_json(hs);
+        assert_eq!(json!({"~#set": [0, 2, 4]}), tr);
     }
 
     #[test]

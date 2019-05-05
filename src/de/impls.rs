@@ -52,8 +52,8 @@ where
     }
 
     fn transit_deserialize_key<D: TransitDeserializer>(
-        deserializer: D,
-        input: D::Input,
+        _deserializer: D,
+        _input: D::Input,
     ) -> TResult<Self> {
         Err(Error::CannotBeKey(
             "BTreeMap<K, V> cannot be deserialized as key",
@@ -117,8 +117,8 @@ where
     }
 
     fn transit_deserialize_key<D: TransitDeserializer>(
-        deserializer: D,
-        input: D::Input,
+        _deserializer: D,
+        _input: D::Input,
     ) -> TResult<Self> {
         Err(Error::CannotBeKey(
             "HashMap<K, V> cannot be deserialized as key",
@@ -149,8 +149,8 @@ impl<T: TransitDeserialize> TransitDeserialize for Vec<T> {
     }
 
     fn transit_deserialize_key<D: TransitDeserializer>(
-        deserializer: D,
-        input: D::Input,
+        _deserializer: D,
+        _input: D::Input,
     ) -> TResult<Self> {
         Err(Error::CannotBeKey("Vec<T> cannot be deserialized as key"))
     }

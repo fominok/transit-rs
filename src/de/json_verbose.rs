@@ -1,6 +1,6 @@
 use super::*;
 use serde_json::{
-    map::{IntoIter as JsMapIntoIter, Map as JsMap},
+    map::{IntoIter as JsMapIntoIter},
     Value as JsVal,
 };
 

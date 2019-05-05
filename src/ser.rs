@@ -17,10 +17,11 @@ pub trait TransitSerialize: Clone {
 
 /// Trait for creation of final representation
 /// because Transit is generic over JSON and MessagePack (both Verbose and not)
-pub trait TransitSerializer {
+pub trait TransitSerializer: Clone {
     type Output;
     type SerializeArray: SerializeArray<Output = Self::Output>;
     type SerializeMap: SerializeMap<Output = Self::Output>;
+    type SerializeTag: SerializeTag<Output = Self::Output>;
 
     fn serialize_null(self) -> Self::Output;
     fn serialize_string(self, v: &str) -> Self::Output;
@@ -33,7 +34,7 @@ pub trait TransitSerializer {
     fn serialize_map(self, len: Option<usize>) -> Self::SerializeMap;
 
     // Tagged value is not equivalent for object
-    //    fn serialize_tagged(self,
+    fn serialize_tagged(self, tag: &str) -> Self::SerializeTag;
 }
 
 /// Array-specific serialization
@@ -50,4 +51,11 @@ pub trait SerializeMap {
 
     fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V);
     fn end(self) -> Self::Output;
+}
+
+/// Tags serialization
+pub trait SerializeTag {
+    type Output;
+
+    fn serialize_value(&mut self, v: Self::Output) -> Self::Output;
 }
