@@ -95,13 +95,13 @@ impl<T: TransitSerialize> TransitSerialize for BTreeSet<T> {
     const TF_TYPE: TransitType = TransitType::Composite;
 
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
-        let mut ser_tag = serializer.clone().serialize_tagged("~#set");
-        let mut ser_arr = serializer.serialize_array(Some(self.len()));
+        let mut ser_arr = serializer
+            .clone()
+            .serialize_tagged_array("~#set", Some(self.len()));
         for v in self.iter() {
             ser_arr.serialize_item((*v).clone());
         }
-        let arr = ser_arr.end();
-        ser_tag.serialize_value(arr)
+        ser_arr.end()
     }
 
     fn transit_serialize_key<S: TransitSerializer>(&self, _serializer: S) -> Option<S::Output> {

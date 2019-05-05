@@ -16,20 +16,6 @@ pub struct JsonMapSerializer {
     cmap: bool,
 }
 
-pub struct JsonVerboseTagSerializer {
-    tag: String,
-}
-
-impl SerializeTag for JsonVerboseTagSerializer {
-    type Output = JsVal;
-
-    fn serialize_value(&mut self, v: Self::Output) -> Self::Output {
-        let mut m = JsMap::with_capacity(1);
-        m.insert(self.tag.clone(), v);
-        JsVal::Object(m)
-    }
-}
-
 impl SerializeMap for JsonMapSerializer {
     type Output = JsVal;
 
@@ -107,11 +93,52 @@ impl JsonSerializer {
     }
 }
 
+struct JsonTagArraySerializer {
+    tag: String,
+    array_serializer: JsonArraySerializer,
+}
+
+struct JsonTagMapSerializer {
+    tag: String,
+    map_serializer: JsonMapSerializer,
+}
+
+impl SerializeTagArray for JsonTagArraySerializer {
+    type Output = JsVal;
+
+    fn serialize_item<T: TransitSerialize>(&mut self, v: T) {
+        self.array_serializer.serialize_item(v);
+    }
+
+    fn end(self) -> Self::Output {
+        let val = self.array_serializer.end();
+        let mut m = JsMap::with_capacity(1);
+        m.insert(self.tag, val);
+        JsVal::Object(m)
+    }
+}
+
+impl SerializeTagMap for JsonTagMapSerializer {
+    type Output = JsVal;
+
+    fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V) {
+        self.map_serializer.serialize_pair(k, v);
+    }
+
+    fn end(self) -> Self::Output {
+        let val = self.map_serializer.end();
+        let mut m = JsMap::with_capacity(1);
+        m.insert(self.tag, val);
+        JsVal::Object(m)
+    }
+}
+
 impl TransitSerializer for JsonSerializer {
     type Output = JsVal;
     type SerializeArray = JsonArraySerializer;
     type SerializeMap = JsonMapSerializer;
-    type SerializeTag = JsonVerboseTagSerializer;
+    type SerializeTagArray = JsonTagArraySerializer;
+    type SerializeTagMap = JsonTagMapSerializer;
 
     fn serialize_null(self) -> Self::Output {
         self.quote_check(JsVal::Null)
@@ -161,9 +188,17 @@ impl TransitSerializer for JsonSerializer {
         }
     }
 
-    fn serialize_tagged(self, tag: &str) -> Self::SerializeTag {
-        JsonVerboseTagSerializer {
+    fn serialize_tagged_array(self, tag: &str, len: Option<usize>) -> Self::SerializeTagArray {
+        JsonTagArraySerializer {
             tag: tag.to_owned(),
+            array_serializer: self.serialize_array(len),
+        }
+    }
+
+    fn serialize_tagged_map(self, tag: &str, len: Option<usize>) -> Self::SerializeTagMap {
+        JsonTagMapSerializer {
+            tag: tag.to_owned(),
+            map_serializer: self.serialize_map(len),
         }
     }
 }

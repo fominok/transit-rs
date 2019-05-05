@@ -21,7 +21,8 @@ pub trait TransitSerializer: Clone {
     type Output;
     type SerializeArray: SerializeArray<Output = Self::Output>;
     type SerializeMap: SerializeMap<Output = Self::Output>;
-    type SerializeTag: SerializeTag<Output = Self::Output>;
+    type SerializeTagArray: SerializeTagArray<Output = Self::Output>;
+    type SerializeTagMap: SerializeTagMap<Output = Self::Output>;
 
     fn serialize_null(self) -> Self::Output;
     fn serialize_string(self, v: &str) -> Self::Output;
@@ -34,7 +35,8 @@ pub trait TransitSerializer: Clone {
     fn serialize_map(self, len: Option<usize>) -> Self::SerializeMap;
 
     // Tagged value is not equivalent for object
-    fn serialize_tagged(self, tag: &str) -> Self::SerializeTag;
+    fn serialize_tagged_array(self, tag: &str, len: Option<usize>) -> Self::SerializeTagArray;
+    fn serialize_tagged_map(self, tag: &str, len: Option<usize>) -> Self::SerializeTagMap;
 }
 
 /// Array-specific serialization
@@ -54,8 +56,16 @@ pub trait SerializeMap {
 }
 
 /// Tags serialization
-pub trait SerializeTag {
+pub trait SerializeTagArray {
     type Output;
 
-    fn serialize_value(&mut self, v: Self::Output) -> Self::Output;
+    fn serialize_item<T: TransitSerialize>(&mut self, v: T);
+    fn end(self) -> Self::Output;
+}
+
+pub trait SerializeTagMap {
+    type Output;
+
+    fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V);
+    fn end(self) -> Self::Output;
 }

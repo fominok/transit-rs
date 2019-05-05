@@ -1,8 +1,5 @@
 use super::*;
-use serde_json::{
-    map::{IntoIter as JsMapIntoIter},
-    Value as JsVal,
-};
+use serde_json::{map::IntoIter as JsMapIntoIter, Value as JsVal};
 
 pub fn from_transit_json<T: TransitDeserialize>(v: JsVal) -> TResult<T> {
     TransitDeserialize::transit_deserialize(JsonDeserializer, v)
