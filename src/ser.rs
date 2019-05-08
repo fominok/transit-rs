@@ -1,6 +1,6 @@
 mod impls;
 pub mod json;
-pub mod json_verbose;
+//pub mod json_verbose;
 
 #[derive(PartialEq)]
 pub enum TransitType {
@@ -32,11 +32,16 @@ pub trait TransitSerializer: Clone {
     fn serialize_array(self, len: Option<usize>) -> Self::SerializeArray;
 
     // Like what should be an object semantically
-    fn serialize_map(self, len: Option<usize>) -> Self::SerializeMap;
+    fn serialize_map(self, len: Option<usize>, cmap: bool) -> Self::SerializeMap;
 
     // Tagged value is not equivalent for object
     fn serialize_tagged_array(self, tag: &str, len: Option<usize>) -> Self::SerializeTagArray;
-    fn serialize_tagged_map(self, tag: &str, len: Option<usize>) -> Self::SerializeTagMap;
+    fn serialize_tagged_map(
+        self,
+        tag: &str,
+        len: Option<usize>,
+        cmap: bool,
+    ) -> Self::SerializeTagMap;
 }
 
 /// Array-specific serialization

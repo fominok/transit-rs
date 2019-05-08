@@ -14,21 +14,23 @@ pub struct JsonArraySerializer<'a> {
 }
 
 pub struct JsonMapSerializer<'a> {
-    buf_str_keys: Vec<Option<JsVal>>,
     buf_keys: Vec<JsVal>,
     buf_vals: Vec<JsVal>,
     cmap: bool,
+    cmap_str: Option<String>,
     cacher: &'a RefCell<KeyCacher>,
 }
 
 struct JsonTagArraySerializer<'a> {
     tag: String,
     array_serializer: JsonArraySerializer<'a>,
+    tag_cached: String,
 }
 
 struct JsonTagMapSerializer<'a> {
     tag: String,
     map_serializer: JsonMapSerializer<'a>,
+    tag_cached: String,
 }
 
 impl<'a> SerializeTagArray for JsonTagArraySerializer<'a> {
@@ -41,7 +43,7 @@ impl<'a> SerializeTagArray for JsonTagArraySerializer<'a> {
     fn end(self) -> Self::Output {
         let val = self.array_serializer.end();
         let mut vec = Vec::with_capacity(2);
-        vec.push(JsVal::String(self.tag));
+        vec.push(JsVal::String(self.tag_cached));
         vec.push(val);
         JsVal::Array(vec)
     }
@@ -57,7 +59,7 @@ impl<'a> SerializeTagMap for JsonTagMapSerializer<'a> {
     fn end(self) -> Self::Output {
         let val = self.map_serializer.end();
         let mut vec = Vec::with_capacity(2);
-        vec.push(JsVal::String(self.tag));
+        vec.push(JsVal::String(self.tag_cached));
         vec.push(val);
         JsVal::Array(vec)
     }
@@ -69,14 +71,18 @@ impl<'a> SerializeMap for JsonMapSerializer<'a> {
     type Output = JsVal;
 
     fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V) {
-        self.cmap = self.cmap || (K::TF_TYPE == TransitType::Composite);
-        self.buf_keys
-            .push(k.transit_serialize(JsonSerializer::new(self.cacher)));
+        // self.cmap = self.cmap || (K::TF_TYPE == TransitType::Composite);
+        let k_ser = if self.cmap {
+            k.transit_serialize(JsonSerializer::new(self.cacher))
+        } else {
+            let key = k
+                .transit_serialize_key(JsonSerializer::new(self.cacher))
+                .expect("Tired of it");
+            JsVal::String(self.cacher.borrow_mut().cache(key.as_str().unwrap()))
+        };
+        self.buf_keys.push(k_ser);
         self.buf_vals
             .push(v.transit_serialize(JsonSerializer::new(self.cacher)));
-        // FIXME: compute cmap in the beginning and do not compute this vector if not needed
-        self.buf_str_keys
-            .push(k.transit_serialize_key(JsonSerializer::new(self.cacher)));
     }
 
     fn end(self) -> Self::Output {
@@ -87,14 +93,14 @@ impl<'a> SerializeMap for JsonMapSerializer<'a> {
                 val.push(v);
             }
             let mut vec = Vec::with_capacity(2);
-            vec.push(JsVal::String("~#cmap".to_owned()));
+            vec.push(JsVal::String(self.cmap_str.expect("Already checked lmao")));
             vec.push(JsVal::Array(val));
             JsVal::Array(vec)
         } else {
             let mut vec = Vec::with_capacity(self.buf_keys.len() + 1);
             vec.push(JsVal::String("^".to_owned()));
-            for (k, v) in self.buf_str_keys.into_iter().zip(self.buf_vals.into_iter()) {
-                vec.push(k.expect("wut"));
+            for (k, v) in self.buf_keys.into_iter().zip(self.buf_vals.into_iter()) {
+                vec.push(k);
                 vec.push(v);
             }
             JsVal::Array(vec)
@@ -192,21 +198,29 @@ impl<'a> TransitSerializer for JsonSerializer<'a> {
         }
     }
 
-    fn serialize_map(self, len: Option<usize>) -> Self::SerializeMap {
+    fn serialize_map(self, len: Option<usize>, cmap: bool) -> Self::SerializeMap {
         if let Some(len) = len {
             JsonMapSerializer {
-                buf_str_keys: Vec::with_capacity(len),
                 buf_keys: Vec::with_capacity(len),
                 buf_vals: Vec::with_capacity(len),
-                cmap: false,
+                cmap: cmap,
+                cmap_str: if cmap {
+                    Some(self.cacher.borrow_mut().cache("~#cmap"))
+                } else {
+                    None
+                },
                 cacher: self.cacher,
             }
         } else {
             JsonMapSerializer {
-                buf_str_keys: Vec::new(),
                 buf_keys: Vec::new(),
                 buf_vals: Vec::new(),
-                cmap: false,
+                cmap: cmap,
+                cmap_str: if cmap {
+                    Some(self.cacher.borrow_mut().cache("~#cmap"))
+                } else {
+                    None
+                },
                 cacher: self.cacher,
             }
         }
@@ -215,14 +229,21 @@ impl<'a> TransitSerializer for JsonSerializer<'a> {
     fn serialize_tagged_array(self, tag: &str, len: Option<usize>) -> Self::SerializeTagArray {
         JsonTagArraySerializer {
             tag: tag.to_owned(),
+            tag_cached: self.cacher.borrow_mut().cache(&tag),
             array_serializer: self.serialize_array(len),
         }
     }
 
-    fn serialize_tagged_map(self, tag: &str, len: Option<usize>) -> Self::SerializeTagMap {
+    fn serialize_tagged_map(
+        self,
+        tag: &str,
+        len: Option<usize>,
+        cmap: bool,
+    ) -> Self::SerializeTagMap {
         JsonTagMapSerializer {
             tag: tag.to_owned(),
-            map_serializer: self.serialize_map(len),
+            tag_cached: self.cacher.borrow_mut().cache(&tag),
+            map_serializer: self.serialize_map(len, cmap),
         }
     }
 }

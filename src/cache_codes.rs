@@ -35,7 +35,6 @@ pub(crate) struct KeyCacher {
     map: HashMap<String, String>,
 }
 
-
 // FIXME: reduce copying
 impl KeyCacher {
     pub(crate) fn cache(&mut self, s: &str) -> String {

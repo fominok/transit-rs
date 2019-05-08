@@ -47,7 +47,8 @@ impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for BTreeMap<K, 
     const TF_TYPE: TransitType = TransitType::Composite;
 
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
-        let mut ser_map = serializer.serialize_map(Some(self.len()));
+        let mut ser_map =
+            serializer.serialize_map(Some(self.len()), K::TF_TYPE == TransitType::Composite);
         for (k, v) in self.iter() {
             ser_map.serialize_pair((*k).clone(), (*v).clone());
         }
@@ -63,7 +64,8 @@ impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for HashMap<K, V
     const TF_TYPE: TransitType = TransitType::Composite;
 
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
-        let mut ser_map = serializer.serialize_map(Some(self.len()));
+        let mut ser_map =
+            serializer.serialize_map(Some(self.len()), K::TF_TYPE == TransitType::Composite);
         for (k, v) in self.iter() {
             ser_map.serialize_pair((*k).clone(), (*v).clone());
         }

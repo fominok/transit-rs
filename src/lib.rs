@@ -1,6 +1,6 @@
-pub mod de;
-pub mod ser;
+// pub mod de;
 pub(crate) mod cache_codes;
+pub mod ser;
 
 #[cfg(test)]
 mod tests {
