@@ -1,32 +1,37 @@
 use super::*;
+use crate::cache_codes::KeyCacher;
 use serde_json::Value as JsVal;
+use std::cell::RefCell;
 
 pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
-    v.transit_serialize(JsonSerializer::top())
+    let cacher = RefCell::new(KeyCacher::new());
+    v.transit_serialize(JsonSerializer::top(&cacher))
 }
 
-pub struct JsonArraySerializer {
+pub struct JsonArraySerializer<'a> {
     buf: Vec<JsVal>,
+    cacher: &'a RefCell<KeyCacher>,
 }
 
-pub struct JsonMapSerializer {
+pub struct JsonMapSerializer<'a> {
     buf_str_keys: Vec<Option<JsVal>>,
     buf_keys: Vec<JsVal>,
     buf_vals: Vec<JsVal>,
     cmap: bool,
+    cacher: &'a RefCell<KeyCacher>,
 }
 
-struct JsonTagArraySerializer {
+struct JsonTagArraySerializer<'a> {
     tag: String,
-    array_serializer: JsonArraySerializer,
+    array_serializer: JsonArraySerializer<'a>,
 }
 
-struct JsonTagMapSerializer {
+struct JsonTagMapSerializer<'a> {
     tag: String,
-    map_serializer: JsonMapSerializer,
+    map_serializer: JsonMapSerializer<'a>,
 }
 
-impl SerializeTagArray for JsonTagArraySerializer {
+impl<'a> SerializeTagArray for JsonTagArraySerializer<'a> {
     type Output = JsVal;
 
     fn serialize_item<T: TransitSerialize>(&mut self, v: T) {
@@ -42,7 +47,7 @@ impl SerializeTagArray for JsonTagArraySerializer {
     }
 }
 
-impl SerializeTagMap for JsonTagMapSerializer {
+impl<'a> SerializeTagMap for JsonTagMapSerializer<'a> {
     type Output = JsVal;
 
     fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V) {
@@ -58,18 +63,20 @@ impl SerializeTagMap for JsonTagMapSerializer {
     }
 }
 
-impl SerializeMap for JsonMapSerializer {
+// Aggregate first to decide if it is a cmap or not,
+// then perform serialize for keys and vals;
+impl<'a> SerializeMap for JsonMapSerializer<'a> {
     type Output = JsVal;
 
     fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V) {
         self.cmap = self.cmap || (K::TF_TYPE == TransitType::Composite);
         self.buf_keys
-            .push(k.transit_serialize(JsonSerializer::default()));
+            .push(k.transit_serialize(JsonSerializer::new(self.cacher)));
         self.buf_vals
-            .push(v.transit_serialize(JsonSerializer::default()));
+            .push(v.transit_serialize(JsonSerializer::new(self.cacher)));
         // FIXME: compute cmap in the beginning and do not compute this vector if not needed
         self.buf_str_keys
-            .push(k.transit_serialize_key(JsonSerializer::default()));
+            .push(k.transit_serialize_key(JsonSerializer::new(self.cacher)));
     }
 
     fn end(self) -> Self::Output {
@@ -95,11 +102,11 @@ impl SerializeMap for JsonMapSerializer {
     }
 }
 
-impl SerializeArray for JsonArraySerializer {
+impl<'a> SerializeArray for JsonArraySerializer<'a> {
     type Output = JsVal;
     fn serialize_item<T: TransitSerialize>(&mut self, v: T) {
         self.buf
-            .push(v.transit_serialize(JsonSerializer::default()));
+            .push(v.transit_serialize(JsonSerializer::new(self.cacher)));
     }
 
     fn end(self) -> Self::Output {
@@ -108,19 +115,30 @@ impl SerializeArray for JsonArraySerializer {
 }
 
 #[derive(Clone)]
-struct JsonSerializer {
+struct JsonSerializer<'a> {
     top_level: bool,
+    cacher: &'a RefCell<KeyCacher>,
 }
 
-impl Default for JsonSerializer {
-    fn default() -> Self {
-        JsonSerializer { top_level: false }
+// impl Default for JsonSerializer {
+//     fn default() -> Self {
+//         JsonSerializer { top_level: false }
+//     }
+// }
+
+impl<'a> JsonSerializer<'a> {
+    fn top(cacher: &'a RefCell<KeyCacher>) -> Self {
+        JsonSerializer {
+            top_level: true,
+            cacher: cacher,
+        }
     }
-}
 
-impl JsonSerializer {
-    fn top() -> Self {
-        JsonSerializer { top_level: true }
+    fn new(cacher: &'a RefCell<KeyCacher>) -> Self {
+        JsonSerializer {
+            top_level: false,
+            cacher: cacher,
+        }
     }
 
     fn quote_check(self, v: JsVal) -> JsVal {
@@ -135,12 +153,12 @@ impl JsonSerializer {
     }
 }
 
-impl TransitSerializer for JsonSerializer {
+impl<'a> TransitSerializer for JsonSerializer<'a> {
     type Output = JsVal;
-    type SerializeArray = JsonArraySerializer;
-    type SerializeMap = JsonMapSerializer;
-    type SerializeTagArray = JsonTagArraySerializer;
-    type SerializeTagMap = JsonTagMapSerializer;
+    type SerializeArray = JsonArraySerializer<'a>;
+    type SerializeMap = JsonMapSerializer<'a>;
+    type SerializeTagArray = JsonTagArraySerializer<'a>;
+    type SerializeTagMap = JsonTagMapSerializer<'a>;
 
     fn serialize_null(self) -> Self::Output {
         self.quote_check(JsVal::Null)
@@ -163,12 +181,14 @@ impl TransitSerializer for JsonSerializer {
     }
 
     fn serialize_array(self, len: Option<usize>) -> Self::SerializeArray {
-        if let Some(len) = len {
-            JsonArraySerializer {
-                buf: Vec::with_capacity(len),
-            }
+        let buf = if let Some(len) = len {
+            Vec::with_capacity(len)
         } else {
-            JsonArraySerializer { buf: Vec::new() }
+            Vec::new()
+        };
+        JsonArraySerializer {
+            buf: buf,
+            cacher: self.cacher,
         }
     }
 
@@ -179,6 +199,7 @@ impl TransitSerializer for JsonSerializer {
                 buf_keys: Vec::with_capacity(len),
                 buf_vals: Vec::with_capacity(len),
                 cmap: false,
+                cacher: self.cacher,
             }
         } else {
             JsonMapSerializer {
@@ -186,6 +207,7 @@ impl TransitSerializer for JsonSerializer {
                 buf_keys: Vec::new(),
                 buf_vals: Vec::new(),
                 cmap: false,
+                cacher: self.cacher,
             }
         }
     }
@@ -270,6 +292,44 @@ mod test {
                 ["^", "hih", true, "test", true],
                 ["^", "not ok", false, "ok", true]
             ]),
+            tr
+        );
+    }
+
+    #[test]
+    fn array_of_maps_cache() {
+        let mut m1 = BTreeMap::new();
+        let mut m2 = BTreeMap::new();
+        m1.insert("yolo", true);
+        m1.insert("swag", true);
+        m2.insert("yolo", true);
+        m2.insert("swag", false);
+        let v = vec![Box::new(m1), Box::new(m2)];
+
+        let tr = to_transit_json(v);
+        assert_eq!(
+            json!([
+                ["^", "swag", true, "yolo", true],
+                ["^", "^0", false, "^1", true]
+            ]),
+            tr
+        );
+    }
+
+    #[test]
+    fn array_of_sets_cache() {
+        let mut hs1 = BTreeSet::new();
+        hs1.insert(0);
+        hs1.insert(2);
+        hs1.insert(4);
+        let hs2 = hs1.clone();
+        let hs3 = hs1.clone();
+
+        let v = vec![hs1, hs2, hs3];
+
+        let tr = to_transit_json(v);
+        assert_eq!(
+            json!([["~#set", [0, 2, 4]], ["^0", [0, 2, 4]], ["^0", [0, 2, 4]]]),
             tr
         );
     }
