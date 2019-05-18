@@ -170,20 +170,20 @@ impl TransitSerializer for JsonSerializer {
         }
     }
 
-    fn serialize_map(self, len: Option<usize>) -> Self::SerializeMap {
+    fn serialize_map(self, len: Option<usize>, cmap: bool) -> Self::SerializeMap {
         if let Some(len) = len {
             JsonMapSerializer {
                 buf_str_keys: Vec::with_capacity(len),
                 buf_keys: Vec::with_capacity(len),
                 buf_vals: Vec::with_capacity(len),
-                cmap: false,
+                cmap: cmap,
             }
         } else {
             JsonMapSerializer {
                 buf_str_keys: Vec::new(),
                 buf_keys: Vec::new(),
                 buf_vals: Vec::new(),
-                cmap: false,
+                cmap: cmap,
             }
         }
     }
@@ -195,10 +195,15 @@ impl TransitSerializer for JsonSerializer {
         }
     }
 
-    fn serialize_tagged_map(self, tag: &str, len: Option<usize>) -> Self::SerializeTagMap {
+    fn serialize_tagged_map(
+        self,
+        tag: &str,
+        len: Option<usize>,
+        cmap: bool,
+    ) -> Self::SerializeTagMap {
         JsonTagMapSerializer {
             tag: tag.to_owned(),
-            map_serializer: self.serialize_map(len),
+            map_serializer: self.serialize_map(len, cmap),
         }
     }
 }

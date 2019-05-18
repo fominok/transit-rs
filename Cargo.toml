@@ -16,3 +16,7 @@ criterion = "0.2"
 [[bench]]
 name = "my_benchmark"
 harness = false
+
+[[bin]]
+name = "testbin"
+path = "src/bin.rs"

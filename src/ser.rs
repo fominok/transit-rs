@@ -1,6 +1,6 @@
 mod impls;
 pub mod json;
-//pub mod json_verbose;
+pub mod json_verbose;
 
 #[derive(PartialEq)]
 pub enum TransitType {
