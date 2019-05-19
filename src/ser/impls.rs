@@ -144,3 +144,19 @@ impl TransitSerialize for &str {
         Some(serializer.serialize_string(self))
     }
 }
+
+impl<T: TransitSerialize> TransitSerialize for Option<T> {
+    const TF_TYPE: TransitType = T::TF_TYPE;
+
+    fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
+        if let Some(x) = self {
+            x.transit_serialize(serializer)
+        } else {
+            serializer.serialize_null()
+        }
+    }
+
+    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output> {
+        Some(serializer.serialize_string("~_"))
+    }
+}

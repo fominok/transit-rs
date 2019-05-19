@@ -273,4 +273,30 @@ mod test {
             tr
         );
     }
+
+    #[test]
+    fn null() {
+        let kek = Some("swag");
+        let lol = None;
+        let v = vec![kek, lol];
+        let tr = to_transit_json(v);
+
+        assert_eq!(
+            json!(["swag", null]), tr
+        );
+
+    }
+
+    #[test]
+    fn null_key() {
+        let mut hm = BTreeMap::new();
+        let lol: Option<i32> = None;
+        hm.insert(lol, 1337);
+        let tr = to_transit_json(hm);
+
+        assert_eq!(
+            json!(["^", "~_", 1337]), tr
+        );
+
+    }
 }
