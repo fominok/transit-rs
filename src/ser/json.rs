@@ -281,10 +281,7 @@ mod test {
         let v = vec![kek, lol];
         let tr = to_transit_json(v);
 
-        assert_eq!(
-            json!(["swag", null]), tr
-        );
-
+        assert_eq!(json!(["swag", null]), tr);
     }
 
     #[test]
@@ -294,9 +291,6 @@ mod test {
         hm.insert(lol, 1337);
         let tr = to_transit_json(hm);
 
-        assert_eq!(
-            json!(["^", "~_", 1337]), tr
-        );
-
+        assert_eq!(json!(["^", "~_", 1337]), tr);
     }
 }

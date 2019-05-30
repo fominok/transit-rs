@@ -1,5 +1,6 @@
 use super::*;
 use serde_json::{map::Map as JsMap, Value as JsVal};
+use transit_derive::TransitSerialize;
 
 pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
     v.transit_serialize(JsonSerializer::top())
@@ -269,6 +270,21 @@ mod test {
 
         let tr = to_transit_json(hs);
         assert_eq!(json!({"~#set": [0, 2, 4]}), tr);
+    }
+
+    #[test]
+    fn custom_derive() {
+        #[derive(Clone, TransitSerialize)]
+        struct Test {
+            one: i32,
+            two: String,
+        }
+        let mut hs = Test {
+            one: 14,
+            two: "works!".to_owned(),
+        };
+        let tr = to_transit_json(hs);
+        assert_eq!(json!({"~#test": {"one": 14, "two": "works!"}}), tr);
     }
 
     #[test]
