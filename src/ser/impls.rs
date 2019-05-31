@@ -1,4 +1,5 @@
 use super::*;
+use chrono::{Date, DateTime, NaiveDateTime, TimeZone, Utc};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 impl<T: TransitSerialize + ?Sized> TransitSerialize for Box<T> {
@@ -158,5 +159,24 @@ impl<T: TransitSerialize> TransitSerialize for Option<T> {
 
     fn transit_serialize_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output> {
         Some(serializer.serialize_string("~_"))
+    }
+}
+
+fn date_tagged<S>(d: DateTime<Utc>, serializer: S) -> S::Output
+where
+    S: TransitSerializer,
+{
+    serializer.serialize_string(&format!("~t{:?}", d))
+}
+
+impl TransitSerialize for DateTime<Utc> {
+    const TF_TYPE: TransitType = TransitType::Scalar;
+
+    fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
+        date_tagged(*self, serializer)
+    }
+
+    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output> {
+        Some(date_tagged(*self, serializer))
     }
 }

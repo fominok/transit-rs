@@ -274,17 +274,56 @@ mod test {
 
     #[test]
     fn custom_derive() {
+        use chrono::{Date, DateTime, NaiveDateTime, TimeZone, Utc};
         #[derive(Clone, TransitSerialize)]
-        struct Test {
-            one: i32,
-            two: String,
+        struct User {
+            name: String,
+            related: BTreeSet<String>,
+            registered: DateTime<Utc>,
+            skills_by_rates: BTreeMap<i32, BTreeSet<String>>,
         }
-        let mut hs = Test {
-            one: 14,
-            two: "works!".to_owned(),
+
+        let mut rel = BTreeSet::new();
+        rel.insert("Billy".to_owned());
+        rel.insert("Mark".to_owned());
+        rel.insert("Steve".to_owned());
+
+        let mut skills = BTreeMap::new();
+        let mut hs1 = BTreeSet::new();
+        hs1.insert("Linux".to_owned());
+        hs1.insert("Git".to_owned());
+        skills.insert(3, hs1);
+        let mut hs2 = BTreeSet::new();
+        hs2.insert("Performance artist".to_owned());
+        skills.insert(2, hs2);
+        let mut hs3 = BTreeSet::new();
+        hs3.insert("Rust".to_owned());
+        skills.insert(1, hs3);
+
+        let mut u = User {
+            name: "Van".to_owned(),
+            related: rel,
+            registered: Utc.ymd(1995, 10, 11).and_hms(0, 0, 0),
+            skills_by_rates: skills,
         };
-        let tr = to_transit_json(hs);
-        assert_eq!(json!({"~#test": {"one": 14, "two": "works!"}}), tr);
+        let tr = to_transit_json(u);
+        assert_eq!(
+            json!(
+                {
+                    "~#user": {
+                        "name": "Van",
+                        "related": {"~#set": ["Billy", "Mark", "Steve"]},
+                        "registered": "~t1995-10-11T00:00:00Z",
+                        "skills_by_rates": {
+                            "~i3": {"~#set": ["Git", "Linux"]},
+                            "~i2": {"~#set": ["Performance artist"]},
+                            "~i1": {"~#set": ["Rust"]},
+                        }
+                    }
+                }
+            ),
+            tr
+        );
     }
 
     #[test]
