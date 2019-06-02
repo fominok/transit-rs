@@ -273,8 +273,8 @@ mod test {
     }
 
     #[test]
-    fn custom_derive() {
-        use chrono::{Date, DateTime, NaiveDateTime, TimeZone, Utc};
+    fn custom_derive_stuct_map() {
+        use chrono::{DateTime, TimeZone, Utc};
         #[derive(Clone, TransitSerialize)]
         struct User {
             name: String,
@@ -300,7 +300,7 @@ mod test {
         hs3.insert("Rust".to_owned());
         skills.insert(1, hs3);
 
-        let mut u = User {
+        let u = User {
             name: "Van".to_owned(),
             related: rel,
             registered: Utc.ymd(1995, 10, 11).and_hms(0, 0, 0),
@@ -324,6 +324,16 @@ mod test {
             ),
             tr
         );
+    }
+
+    #[test]
+    fn custom_derive_stuct_tuple() {
+        #[derive(Clone, TransitSerialize)]
+        struct Point(i32, i32);
+        let p = Point(13, 37);
+
+        let tr = to_transit_json(p);
+        assert_eq!(json!({"~#point": [13, 37]}), tr);
     }
 
     #[test]
