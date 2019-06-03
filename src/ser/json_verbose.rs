@@ -337,6 +337,43 @@ mod test {
     }
 
     #[test]
+    fn custom_derive_enum() {
+        #[derive(Clone, TransitSerialize)]
+        enum Event {
+            TemperatureChanged { room_name: String, temperature: i32 },
+            MotionDetected { room_name: String },
+            GoneOnline(String),
+            GoneOffline(String),
+        }
+
+        let e1 = Event::TemperatureChanged {
+            room_name: "Kitchen".to_owned(),
+            temperature: 32,
+        };
+        let tr1 = to_transit_json(e1);
+        assert_eq!(
+            json!(
+            {
+                "~#temperaturechanged": {
+                    "room_name": "Kitchen",
+                    "temperature": 32
+                }
+            }),
+            tr1
+        );
+
+        let e2 = Event::GoneOffline("device".to_owned());
+        let tr2 = to_transit_json(e2);
+        assert_eq!(
+            json!(
+            {
+                "~#goneoffline": ["device"]
+            }),
+            tr2
+        );
+    }
+
+    #[test]
     fn array() {
         let mut m1 = BTreeMap::new();
         let mut m2 = BTreeMap::new();
