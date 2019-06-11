@@ -1,5 +1,5 @@
 # transit-rs
-Transit serialization format support
+Transit serialization format support (early WIP)
 
 [Transit](https://github.com/cognitect/transit-format) is a format and set of libraries for
 conveying values between applications written in different programming languages. This repository
