@@ -1,5 +1,5 @@
 mod impls;
-pub mod json;
+//pub mod json;
 pub mod json_verbose;
 
 #[derive(PartialEq)]
@@ -8,8 +8,7 @@ pub enum TransitType {
     Composite,
 }
 
-// FIXME: remove Clone
-pub trait TransitSerialize: Clone {
+pub trait TransitSerialize {
     const TF_TYPE: TransitType;
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output;
     fn transit_serialize_key<S: TransitSerializer>(&self, serializer: S) -> Option<S::Output>;
@@ -43,7 +42,7 @@ pub trait TransitSerializer: Clone {
 pub trait SerializeArray {
     type Output;
 
-    fn serialize_item<T: TransitSerialize>(&mut self, v: T);
+    fn serialize_item<T: TransitSerialize>(&mut self, v: &T);
     fn end(self) -> Self::Output;
 }
 
@@ -51,7 +50,7 @@ pub trait SerializeArray {
 pub trait SerializeMap {
     type Output;
 
-    fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V);
+    fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: &K, v: &V);
     fn end(self) -> Self::Output;
 }
 
@@ -59,13 +58,13 @@ pub trait SerializeMap {
 pub trait SerializeTagArray {
     type Output;
 
-    fn serialize_item<T: TransitSerialize>(&mut self, v: T);
+    fn serialize_item<T: TransitSerialize>(&mut self, v: &T);
     fn end(self) -> Self::Output;
 }
 
 pub trait SerializeTagMap {
     type Output;
 
-    fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V);
+    fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: &K, v: &V);
     fn end(self) -> Self::Output;
 }

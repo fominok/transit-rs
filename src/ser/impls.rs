@@ -1,5 +1,5 @@
 use super::*;
-use chrono::{Date, DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 impl<T: TransitSerialize + ?Sized> TransitSerialize for Box<T> {
@@ -50,7 +50,7 @@ impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for BTreeMap<K, 
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
         let mut ser_map = serializer.serialize_map(Some(self.len()));
         for (k, v) in self.iter() {
-            ser_map.serialize_pair((*k).clone(), (*v).clone());
+            ser_map.serialize_pair(k, v);
         }
         ser_map.end()
     }
@@ -66,7 +66,7 @@ impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for HashMap<K, V
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
         let mut ser_map = serializer.serialize_map(Some(self.len()));
         for (k, v) in self.iter() {
-            ser_map.serialize_pair((*k).clone(), (*v).clone());
+            ser_map.serialize_pair(k, v);
         }
         ser_map.end()
     }
@@ -82,7 +82,7 @@ impl<T: TransitSerialize> TransitSerialize for Vec<T> {
     fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
         let mut ser_arr = serializer.serialize_array(Some(self.len()));
         for v in self.iter() {
-            ser_arr.serialize_item((*v).clone());
+            ser_arr.serialize_item(v);
         }
         ser_arr.end()
     }
@@ -100,7 +100,7 @@ impl<T: TransitSerialize> TransitSerialize for BTreeSet<T> {
             .clone()
             .serialize_tagged_array("~#set", Some(self.len()));
         for v in self.iter() {
-            ser_arr.serialize_item((*v).clone());
+            ser_arr.serialize_item(v);
         }
         ser_arr.end()
     }

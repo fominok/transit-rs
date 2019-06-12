@@ -20,7 +20,7 @@ pub struct JsonMapSerializer {
 impl SerializeMap for JsonMapSerializer {
     type Output = JsVal;
 
-    fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V) {
+    fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: &K, v: &V) {
         self.cmap = self.cmap || (K::TF_TYPE == TransitType::Composite);
         self.buf_keys
             .push(k.transit_serialize(JsonSerializer::default()));
@@ -57,7 +57,7 @@ impl SerializeMap for JsonMapSerializer {
 
 impl SerializeArray for JsonArraySerializer {
     type Output = JsVal;
-    fn serialize_item<T: TransitSerialize>(&mut self, v: T) {
+    fn serialize_item<T: TransitSerialize>(&mut self, v: &T) {
         self.buf
             .push(v.transit_serialize(JsonSerializer::default()));
     }
@@ -107,7 +107,7 @@ struct JsonTagMapSerializer {
 impl SerializeTagArray for JsonTagArraySerializer {
     type Output = JsVal;
 
-    fn serialize_item<T: TransitSerialize>(&mut self, v: T) {
+    fn serialize_item<T: TransitSerialize>(&mut self, v: &T) {
         self.array_serializer.serialize_item(v);
     }
 
@@ -122,7 +122,7 @@ impl SerializeTagArray for JsonTagArraySerializer {
 impl SerializeTagMap for JsonTagMapSerializer {
     type Output = JsVal;
 
-    fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: K, v: V) {
+    fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: &K, v: &V) {
         self.map_serializer.serialize_pair(k, v);
     }
 
@@ -344,6 +344,7 @@ mod test {
             MotionDetected { room_name: String },
             GoneOnline(String),
             GoneOffline(String),
+            LightsStatus { room_names: Vec<String> },
         }
 
         let e1 = Event::TemperatureChanged {
@@ -370,6 +371,17 @@ mod test {
                 "~#goneoffline": ["device"]
             }),
             tr2
+        );
+
+        let names = vec!["test1".to_owned(), "test2".to_owned()];
+        let e3 = Event::LightsStatus { room_names: names };
+        let tr3 = to_transit_json(e3);
+        assert_eq!(
+            json!(
+            {
+                "~#lightsstatus": { "room_names": ["test1", "test2"] }
+            }),
+            tr3
         );
     }
 

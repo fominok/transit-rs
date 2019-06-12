@@ -38,7 +38,7 @@ fn named_body(tag: String, fields: &syn::FieldsNamed) -> TokenStream {
         let mut ser_map = serializer
             .clone()
             .serialize_tagged_map(#tag, Some(#len));
-        #(ser_map.serialize_pair(#fields_str, self.#fields_named.clone());)*
+        #(ser_map.serialize_pair(&#fields_str, &self.#fields_named);)*
         ser_map.end()
     }
 }
@@ -50,7 +50,7 @@ fn unnamed_body(tag: String, fields: &syn::FieldsUnnamed) -> TokenStream {
         let mut ser_arr = serializer
             .clone()
             .serialize_tagged_array(#tag, Some(#len));
-        #(ser_arr.serialize_item(self.#accessors);)*
+        #(ser_arr.serialize_item(&self.#accessors);)*
         ser_arr.end()
     }
 }
@@ -108,7 +108,7 @@ fn process_enum_variants(
                     let mut ser_map = serializer
                         .clone()
                         .serialize_tagged_map(#tag, Some(#len));
-                    #(ser_map.serialize_pair(#fields_str, #fields_named.clone());)*
+                    #(ser_map.serialize_pair(&#fields_str, &#fields_named);)*
                     ser_map.end()
                 };
                 let vident = v.clone().ident;
@@ -129,7 +129,7 @@ fn process_enum_variants(
                     let mut ser_arr = serializer
                         .clone()
                         .serialize_tagged_array(#tag, Some(#len));
-                    #(ser_arr.serialize_item(#accessors.clone());)*
+                    #(ser_arr.serialize_item(&#accessors);)*
                     ser_arr.end()
                 };
                 let vident = v.clone().ident;
