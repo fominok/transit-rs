@@ -55,11 +55,10 @@ impl TransitSerializer for JsonSerializer {
         TransitType::Scalar(self.quote_check(v.into()))
     }
 
-    fn serialize_array<'i, 't, T, I>(&self, v: I) -> TransitType<Self::Output>
+    fn serialize_array<'t, T, I>(&self, v: I) -> TransitType<Self::Output>
     where
-        't: 'i,
         T: TransitSerialize + 't,
-        I: Iterator<Item = &'t T> + 'i,
+        I: Iterator<Item = &'t T>,
     {
         let serializer = Self::default();
         let v_ser = v
@@ -68,12 +67,11 @@ impl TransitSerializer for JsonSerializer {
         TransitType::Composite(JsVal::Array(v_ser))
     }
 
-    fn serialize_map<'i, 't, K, V, I>(&self, v: I) -> TransitType<Self::Output>
+    fn serialize_map<'t, K, V, I>(&self, v: I) -> TransitType<Self::Output>
     where
-        't: 'i,
         K: TransitSerialize + 't,
         V: TransitSerialize + 't,
-        I: Iterator<Item = (&'t K, &'t V)> + 'i,
+        I: Iterator<Item = (&'t K, &'t V)>,
     {
         let serializer = Self::default();
         let mut has_comp_key = false;
@@ -112,11 +110,10 @@ impl TransitSerializer for JsonSerializer {
         }
     }
 
-    fn serialize_tagged_array<'i, 't, T, I>(&self, tag: &str, v: I) -> TransitType<Self::Output>
+    fn serialize_tagged_array<'t, T, I>(&self, tag: &str, v: I) -> TransitType<Self::Output>
     where
-        't: 'i,
         T: TransitSerialize + 't,
-        I: Iterator<Item = &'t T> + 'i,
+        I: Iterator<Item = &'t T>,
     {
         let v_ser = self.serialize_array(v).unpack();
         let mut m = JsMap::with_capacity(1);
@@ -124,12 +121,11 @@ impl TransitSerializer for JsonSerializer {
         TransitType::Composite(JsVal::Object(m))
     }
 
-    fn serialize_tagged_map<'i, 't, K, V, I>(&self, tag: &str, v: I) -> TransitType<Self::Output>
+    fn serialize_tagged_map<'t, K, V, I>(&self, tag: &str, v: I) -> TransitType<Self::Output>
     where
-        't: 'i,
         K: TransitSerialize + 't,
         V: TransitSerialize + 't,
-        I: Iterator<Item = (&'t K, &'t V)> + 'i,
+        I: Iterator<Item = (&'t K, &'t V)>,
     {
         let m_ser = self.serialize_map(v).unpack();
         let mut m = JsMap::with_capacity(1);

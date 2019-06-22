@@ -33,29 +33,25 @@ pub trait TransitSerializer {
     fn serialize_int(&self, v: i64) -> TransitType<Self::Output>;
     fn serialize_float(&self, v: f64) -> TransitType<Self::Output>;
 
-    fn serialize_array<'i, 't, T, I>(&self, v: I) -> TransitType<Self::Output>
+    fn serialize_array<'t, T, I>(&self, v: I) -> TransitType<Self::Output>
     where
-        't: 'i,
         T: TransitSerialize + 't,
-        I: Iterator<Item = &'t T> + 'i;
+        I: Iterator<Item = &'t T>;
 
-    fn serialize_map<'i, 't, K, V, I>(&self, v: I) -> TransitType<Self::Output>
+    fn serialize_map<'t, K, V, I>(&self, v: I) -> TransitType<Self::Output>
     where
-        't: 'i,
         K: TransitSerialize + 't,
         V: TransitSerialize + 't,
-        I: Iterator<Item = (&'t K, &'t V)> + 'i;
+        I: Iterator<Item = (&'t K, &'t V)>;
 
-    fn serialize_tagged_array<'i, 't, T, I>(&self, tag: &str, v: I) -> TransitType<Self::Output>
+    fn serialize_tagged_array<'t, T, I>(&self, tag: &str, v: I) -> TransitType<Self::Output>
     where
-        't: 'i,
         T: TransitSerialize + 't,
-        I: Iterator<Item = &'t T> + 'i;
+        I: Iterator<Item = &'t T>;
 
     fn serialize_tagged_map<'i, 't, K, V, I>(&self, tag: &str, v: I) -> TransitType<Self::Output>
     where
-        't: 'i,
         K: TransitSerialize + 't,
         V: TransitSerialize + 't,
-        I: Iterator<Item = (&'t K, &'t V)> + 'i;
+        I: Iterator<Item = (&'t K, &'t V)>;
 }
