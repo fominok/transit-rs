@@ -13,9 +13,8 @@ pub fn transit_macro_derive(input: proc_macro::TokenStream) -> proc_macro::Token
 fn put_serialize_struct_body(name: &Ident, body: TokenStream) -> TokenStream {
     quote! {
         impl TransitSerialize for #name {
-            const TF_TYPE: TransitType = TransitType::Composite;
-            fn transit_serialize<S: TransitSerializer>(&self, serializer: S)
-                -> S::Output {
+           fn transit_serialize<S: TransitSerializer>(&self, serializer: S)
+                -> TransitType<S::Output> {
                 #body
             }
             fn transit_serialize_key<S: TransitSerializer>(&self, serializer: S)
@@ -68,9 +67,7 @@ fn process_struct_unnamed(name: &Ident, tag: String, fields: &syn::FieldsUnnamed
 fn process_enum(name: &Ident, variants: &[TokenStream]) -> TokenStream {
     quote! {
         impl TransitSerialize for #name {
-            const TF_TYPE: TransitType = TransitType::Composite;
-
-            fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> S::Output {
+            fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> TransitType<S::Output> {
                 match self {
                     #(#variants),*
                 }
