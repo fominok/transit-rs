@@ -4,7 +4,7 @@ use serde_json::{map::Map as JsMap, Value as JsVal};
 use itertools::Itertools;
 
 pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
-    v.transit_serialize(&JsonSerializer::top()).unpack()
+    v.transit_serialize(&JsonSerializer::top())
 }
 
 struct JsonSerializer {
@@ -35,39 +35,37 @@ impl JsonSerializer {
 impl TransitSerializer for JsonSerializer {
     type Output = JsVal;
 
-    fn serialize_null(&self) -> TransitType<Self::Output> {
-        TransitType::Scalar(self.quote_check(JsVal::Null))
+    fn serialize_null(&self) -> Self::Output {
+        self.quote_check(JsVal::Null)
     }
 
-    fn serialize_string(&self, v: &str) -> TransitType<Self::Output> {
-        TransitType::Scalar(self.quote_check(v.into()))
+    fn serialize_string(&self, v: &str) -> Self::Output {
+        self.quote_check(v.into())
     }
 
-    fn serialize_bool(&self, v: bool) -> TransitType<Self::Output> {
-        TransitType::Scalar(self.quote_check(v.into()))
+    fn serialize_bool(&self, v: bool) -> Self::Output {
+        self.quote_check(v.into())
     }
 
-    fn serialize_int(&self, v: i64) -> TransitType<Self::Output> {
-        TransitType::Scalar(self.quote_check(v.into()))
+    fn serialize_int(&self, v: i64) -> Self::Output {
+        self.quote_check(v.into())
     }
 
-    fn serialize_float(&self, v: f64) -> TransitType<Self::Output> {
-        TransitType::Scalar(self.quote_check(v.into()))
+    fn serialize_float(&self, v: f64) -> Self::Output {
+        self.quote_check(v.into())
     }
 
-    fn serialize_array<'t, T, I>(&self, v: I) -> TransitType<Self::Output>
+    fn serialize_array<'t, T, I>(&self, v: I) -> Self::Output
     where
         T: TransitSerialize + 't,
         I: Iterator<Item = &'t T>,
     {
         let serializer = Self::default();
-        let v_ser = v
-            .map(|x| x.transit_serialize(&serializer).unpack())
-            .collect();
-        TransitType::Composite(JsVal::Array(v_ser))
+        let v_ser = v.map(|x| x.transit_serialize(&serializer)).collect();
+        JsVal::Array(v_ser)
     }
 
-    fn serialize_map<'t, K, V, I>(&self, v: I) -> TransitType<Self::Output>
+    fn serialize_map<'t, K, V, I>(&self, v: I) -> Self::Output
     where
         K: TransitSerialize + 't,
         V: TransitSerialize + 't,
@@ -81,12 +79,14 @@ impl TransitSerializer for JsonSerializer {
                     {
                         let k = key.transit_serialize_key(&serializer);
                         match k {
-                            TransitType::Composite(_) => has_comp_key = true,
-                            _ => (),
+                            Some(x) => x,
+                            None => {
+                                has_comp_key = true;
+                                key.transit_serialize(&serializer)
+                            }
                         }
-                        k.unpack()
                     },
-                    value.transit_serialize(&serializer).unpack(),
+                    value.transit_serialize(&serializer),
                 )
             })
             .unzip();
@@ -95,7 +95,7 @@ impl TransitSerializer for JsonSerializer {
             let interleaved: Vec<JsVal> = ser_k.into_iter().interleave(ser_v).collect();
             let mut m = JsMap::with_capacity(1);
             m.insert("~#cmap".to_owned(), JsVal::Array(interleaved));
-            TransitType::Composite(JsVal::Object(m))
+            JsVal::Object(m)
         } else {
             let mut m = JsMap::with_capacity(ser_k.len());
             for (key, value) in ser_k.into_iter().zip(ser_v) {
@@ -106,31 +106,31 @@ impl TransitSerializer for JsonSerializer {
                     value,
                 );
             }
-            TransitType::Composite(JsVal::Object(m))
+            JsVal::Object(m)
         }
     }
 
-    fn serialize_tagged_array<'t, T, I>(&self, tag: &str, v: I) -> TransitType<Self::Output>
+    fn serialize_tagged_array<'t, T, I>(&self, tag: &str, v: I) -> Self::Output
     where
         T: TransitSerialize + 't,
         I: Iterator<Item = &'t T>,
     {
-        let v_ser = self.serialize_array(v).unpack();
+        let v_ser = self.serialize_array(v);
         let mut m = JsMap::with_capacity(1);
         m.insert(tag.to_owned(), v_ser);
-        TransitType::Composite(JsVal::Object(m))
+        JsVal::Object(m)
     }
 
-    fn serialize_tagged_map<'t, K, V, I>(&self, tag: &str, v: I) -> TransitType<Self::Output>
+    fn serialize_tagged_map<'t, K, V, I>(&self, tag: &str, v: I) -> Self::Output
     where
         K: TransitSerialize + 't,
         V: TransitSerialize + 't,
         I: Iterator<Item = (&'t K, &'t V)>,
     {
-        let m_ser = self.serialize_map(v).unpack();
+        let m_ser = self.serialize_map(v);
         let mut m = JsMap::with_capacity(1);
         m.insert(tag.to_owned(), m_ser);
-        TransitType::Composite(JsVal::Object(m))
+        JsVal::Object(m)
     }
 }
 
