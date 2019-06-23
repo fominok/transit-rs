@@ -1,10 +1,13 @@
 mod impls;
-//pub mod json;
 pub mod json_verbose;
+//pub mod json;
 
 pub trait TransitSerialize {
     fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output;
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output>;
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output>;
 }
 
 /// Trait for creation of final representation
@@ -39,4 +42,10 @@ pub trait TransitSerializer {
         K: TransitSerialize + 't,
         V: TransitSerialize + 't,
         I: Iterator<Item = (&'t K, &'t V)>;
+}
+
+pub trait TransitKeySerializer {
+    type Output;
+
+    fn serialize_key(&self, v: &str) -> Self::Output;
 }

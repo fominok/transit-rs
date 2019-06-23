@@ -79,7 +79,7 @@ impl TransitSerializer for JsonSerializer {
                     {
                         let k = key.transit_serialize_key(&serializer);
                         match k {
-                            Some(x) => x,
+                            Some(x) => JsVal::String(x),
                             None => {
                                 has_comp_key = true;
                                 key.transit_serialize(&serializer)
@@ -131,6 +131,14 @@ impl TransitSerializer for JsonSerializer {
         let mut m = JsMap::with_capacity(1);
         m.insert(tag.to_owned(), m_ser);
         JsVal::Object(m)
+    }
+}
+
+impl TransitKeySerializer for JsonSerializer {
+    type Output = String;
+
+    fn serialize_key(&self, v: &str) -> Self::Output {
+        v.to_owned()
     }
 }
 

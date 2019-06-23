@@ -7,7 +7,10 @@ impl<T: TransitSerialize + ?Sized> TransitSerialize for Box<T> {
         (**self).transit_serialize(serializer)
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
         (**self).transit_serialize_key(serializer)
     }
 }
@@ -17,7 +20,10 @@ impl<'a, T: TransitSerialize + ?Sized> TransitSerialize for &'a T {
         (**self).transit_serialize(serializer)
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
         (**self).transit_serialize_key(serializer)
     }
 }
@@ -27,14 +33,17 @@ impl TransitSerialize for bool {
         serializer.serialize_bool(*self)
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
         let s = if *self {
             "~?t".to_owned()
         } else {
             "~?f".to_owned()
         };
 
-        Some(serializer.serialize_string(&s))
+        Some(serializer.serialize_key(&s))
     }
 }
 
@@ -43,7 +52,10 @@ impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for BTreeMap<K, 
         serializer.serialize_map(self.iter())
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
         None
     }
 }
@@ -53,7 +65,10 @@ impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for HashMap<K, V
         serializer.serialize_map(self.iter())
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
         None
     }
 }
@@ -63,7 +78,10 @@ impl<T: TransitSerialize> TransitSerialize for Vec<T> {
         serializer.serialize_array(self.iter())
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
         None
     }
 }
@@ -73,8 +91,11 @@ impl<T: TransitSerialize> TransitSerialize for BTreeSet<T> {
         serializer.serialize_tagged_array("~#set", self.iter())
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
-        Some(self.transit_serialize(serializer))
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
+        None
     }
 }
 
@@ -83,8 +104,11 @@ impl TransitSerialize for i32 {
         serializer.serialize_int((*self).into())
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
-        Some(serializer.serialize_string(&format!("~i{}", self)))
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
+        Some(serializer.serialize_key(&format!("~i{}", self)))
     }
 }
 
@@ -93,8 +117,11 @@ impl TransitSerialize for String {
         serializer.serialize_string(self)
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
-        Some(serializer.serialize_string(self))
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
+        Some(serializer.serialize_key(self))
     }
 }
 
@@ -103,8 +130,11 @@ impl TransitSerialize for &str {
         serializer.serialize_string(self)
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
-        Some(serializer.serialize_string(self))
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
+        Some(serializer.serialize_key(self))
     }
 }
 
@@ -117,24 +147,23 @@ impl<T: TransitSerialize> TransitSerialize for Option<T> {
         }
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
-        Some(serializer.serialize_string("~_"))
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
+        Some(serializer.serialize_key("~_"))
     }
-}
-
-fn date_tagged<S>(d: DateTime<Utc>, serializer: &S) -> S::Output
-where
-    S: TransitSerializer,
-{
-    serializer.serialize_string(&format!("~t{:?}", d))
 }
 
 impl TransitSerialize for DateTime<Utc> {
     fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output {
-        date_tagged(*self, serializer)
+        serializer.serialize_string(&format!("~t{:?}", self))
     }
 
-    fn transit_serialize_key<S: TransitSerializer>(&self, serializer: &S) -> Option<S::Output> {
-        Some(date_tagged(*self, serializer))
+    fn transit_serialize_key<KS: TransitKeySerializer>(
+        &self,
+        serializer: &KS,
+    ) -> Option<KS::Output> {
+        Some(serializer.serialize_key(&format!("~t{:?}", self)))
     }
 }
