@@ -49,12 +49,12 @@ impl TransitSerialize for bool {
 
 impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for BTreeMap<K, V> {
     fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output {
-        serializer.serialize_map(self.iter())
+        serializer.serialize_map_iter(self.iter())
     }
 
     fn transit_serialize_key<KS: TransitKeySerializer>(
         &self,
-        serializer: &KS,
+        _serializer: &KS,
     ) -> Option<KS::Output> {
         None
     }
@@ -62,12 +62,12 @@ impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for BTreeMap<K, 
 
 impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for HashMap<K, V> {
     fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output {
-        serializer.serialize_map(self.iter())
+        serializer.serialize_map_iter(self.iter())
     }
 
     fn transit_serialize_key<KS: TransitKeySerializer>(
         &self,
-        serializer: &KS,
+        _serializer: &KS,
     ) -> Option<KS::Output> {
         None
     }
@@ -75,12 +75,12 @@ impl<K: TransitSerialize, V: TransitSerialize> TransitSerialize for HashMap<K, V
 
 impl<T: TransitSerialize> TransitSerialize for Vec<T> {
     fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output {
-        serializer.serialize_array(self.iter())
+        serializer.serialize_array_iter(self.iter())
     }
 
     fn transit_serialize_key<KS: TransitKeySerializer>(
         &self,
-        serializer: &KS,
+        _serializer: &KS,
     ) -> Option<KS::Output> {
         None
     }
@@ -88,12 +88,12 @@ impl<T: TransitSerialize> TransitSerialize for Vec<T> {
 
 impl<T: TransitSerialize> TransitSerialize for BTreeSet<T> {
     fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output {
-        serializer.serialize_tagged_array("~#set", self.iter())
+        serializer.serialize_tagged_array_iter("~#set", self.iter())
     }
 
     fn transit_serialize_key<KS: TransitKeySerializer>(
         &self,
-        serializer: &KS,
+        _serializer: &KS,
     ) -> Option<KS::Output> {
         None
     }
