@@ -13,9 +13,32 @@ we need to abstract over three possible implementations (JSON, JSON Verbose
 and MessagePack). If a type needs to be serializeable into Transit it needs
 to implement `TransitSerialize` trait.
 
+At this moment serialization works only with JSON Verbose serializer, also
+there is a derive macro. Caching and deserialization are coming.
+Examples are located in `ser/json_verbose.rs` file within `test` module.
+
+## Roadmap
+
+- [ ] Serialization
+  - [x] API
+  - [x] Standard types implementation
+  - [x] JSON (Verbose)
+    - [x] Serializer
+    - [x] Derive macro
+  - [ ] JSON (Non-verbose/caching)
+    - [ ] Serializer
+    - [ ] Derive macro
+- [ ] Deserialization
+  - [ ] API
+  - [ ] Standard types implementation
+  - [ ] JSON (Verbose)
+    - [ ] Serializer
+    - [ ] Derive macro
+  - [ ] JSON (Non-verbose/caching)
+    - [ ] Serializer
+    - [ ] Derive macro
+- [ ] MessagePack?
+
+
 ## License
 MIT
-
-_Note: while deserialization works, the serialization part is covered much
-better and with no caching support (only JSON Verbose), but all features
-will be covered soon._
