@@ -67,7 +67,8 @@ impl TransitSerializer for JsonSerializer {
                 inner_serializer: inner,
             }
         } else {
-            JsonArraySerializer { buf: Vec::new(),
+            JsonArraySerializer {
+                buf: Vec::new(),
 
                 inner_serializer: inner,
             }
@@ -78,7 +79,6 @@ impl TransitSerializer for JsonSerializer {
         let inner = Self::default();
         if let Some(len) = len {
             JsonMapSerializer {
-                buf_str_keys: Vec::with_capacity(len),
                 buf_keys: Vec::with_capacity(len),
                 buf_vals: Vec::with_capacity(len),
                 cmap: false,
@@ -86,7 +86,6 @@ impl TransitSerializer for JsonSerializer {
             }
         } else {
             JsonMapSerializer {
-                buf_str_keys: Vec::new(),
                 buf_keys: Vec::new(),
                 buf_vals: Vec::new(),
                 cmap: false,
@@ -95,15 +94,15 @@ impl TransitSerializer for JsonSerializer {
         }
     }
 
-    fn serialize_tagged_array(self, tag: &str, len: Option<usize>) -> Self::TaggedArraySerializer {
-        JsonTagArraySerializer {
+    fn serialize_tagged_array(&self, tag: &str, len: Option<usize>) -> Self::TaggedArraySerializer {
+        JsonTaggedArraySerializer {
             tag: tag.to_owned(),
             array_serializer: self.serialize_array(len),
         }
     }
 
-    fn serialize_tagged_map(self, tag: &str, len: Option<usize>) -> Self::TaggedMapSerializer {
-        JsonTagMapSerializer {
+    fn serialize_tagged_map(&self, tag: &str, len: Option<usize>) -> Self::TaggedMapSerializer {
+        JsonTaggedMapSerializer {
             tag: tag.to_owned(),
             map_serializer: self.serialize_map(len),
         }
@@ -169,7 +168,7 @@ impl TransitSerializer for JsonSerializer {
         T: TransitSerialize + 't,
         I: Iterator<Item = &'t T>,
     {
-        let v_ser = self.serialize_array(v);
+        let v_ser = self.serialize_array_iter(v);
         let mut m = JsMap::with_capacity(1);
         m.insert(tag.to_owned(), v_ser);
         JsVal::Object(m)
@@ -181,7 +180,7 @@ impl TransitSerializer for JsonSerializer {
         V: TransitSerialize + 't,
         I: Iterator<Item = (&'t K, &'t V)>,
     {
-        let m_ser = self.serialize_map(v);
+        let m_ser = self.serialize_map_iter(v);
         let mut m = JsMap::with_capacity(1);
         m.insert(tag.to_owned(), m_ser);
         JsVal::Object(m)
@@ -202,7 +201,6 @@ pub struct JsonArraySerializer {
 }
 
 pub struct JsonMapSerializer {
-    buf_str_keys: Vec<Option<JsVal>>,
     buf_keys: Vec<JsVal>,
     buf_vals: Vec<JsVal>,
     cmap: bool,
@@ -213,36 +211,38 @@ impl TransitMapSerializer for JsonMapSerializer {
     type Output = JsVal;
 
     fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: &K, v: &V) {
-        self.cmap = self.cmap || (K::TF_TYPE == TransitType::Composite);
-        self.buf_keys
-            .push(k.transit_serialize(&self.inner_serializer));
+        if let Some(x) = k.transit_serialize_key(&self.inner_serializer) {
+            self.buf_keys.push(JsVal::String(x));
+        } else {
+            self.cmap = true;
+            self.buf_keys
+                .push(k.transit_serialize(&self.inner_serializer));
+        }
         self.buf_vals
-            .push(v.transit_serialize(JsonSerializer::default()));
-        // FIXME: compute cmap in the beginning and do not compute this vector if not needed
-        self.buf_str_keys
-            .push(k.transit_serialize_key(&self.inner_serializer));
+            .push(v.transit_serialize(&self.inner_serializer));
     }
 
     fn end(self) -> Self::Output {
         if self.cmap {
-            let mut val: Vec<JsVal> = Vec::with_capacity(2 * self.buf_keys.len());
-            for (k, v) in self.buf_keys.into_iter().zip(self.buf_vals.into_iter()) {
-                val.push(k);
-                val.push(v);
-            }
-            let mut map = JsMap::with_capacity(1);
-            map.insert("~#cmap".to_owned(), JsVal::Array(val));
-            JsVal::Object(map)
+            let interleaved: Vec<JsVal> = self
+                .buf_keys
+                .into_iter()
+                .interleave(self.buf_vals)
+                .collect();
+            let mut m = JsMap::with_capacity(1);
+            m.insert("~#cmap".to_owned(), JsVal::Array(interleaved));
+            JsVal::Object(m)
         } else {
-            let mut map = JsMap::with_capacity(self.buf_keys.len());
-            for (k, v) in self.buf_str_keys.into_iter().zip(self.buf_vals.into_iter()) {
-                if let JsVal::String(key) = k.expect("Dubg shit") {
-                    map.insert(key, v);
-                } else {
-                    unimplemented!();
-                }
+            let mut m = JsMap::with_capacity(self.buf_keys.len());
+            for (key, value) in self.buf_keys.into_iter().zip(self.buf_vals) {
+                m.insert(
+                    key.as_str()
+                        .expect("Scalar keys are always strings")
+                        .to_owned(),
+                    value,
+                );
             }
-            JsVal::Object(map)
+            JsVal::Object(m)
         }
     }
 }
@@ -250,8 +250,7 @@ impl TransitMapSerializer for JsonMapSerializer {
 impl TransitArraySerializer for JsonArraySerializer {
     type Output = JsVal;
     fn serialize_item<T: TransitSerialize>(&mut self, v: &T) {
-        self.buf
-            .push(v.transit_serialize(&self.inner_serializer));
+        self.buf.push(v.transit_serialize(&self.inner_serializer));
     }
 
     fn end(self) -> Self::Output {
@@ -259,17 +258,17 @@ impl TransitArraySerializer for JsonArraySerializer {
     }
 }
 
-struct JsonTagArraySerializer {
+struct JsonTaggedArraySerializer {
     tag: String,
     array_serializer: JsonArraySerializer,
 }
 
-struct JsonTagMapSerializer {
+struct JsonTaggedMapSerializer {
     tag: String,
     map_serializer: JsonMapSerializer,
 }
 
-impl TransitTaggedArraySerializer for JsonTagArraySerializer {
+impl TransitTaggedArraySerializer for JsonTaggedArraySerializer {
     type Output = JsVal;
 
     fn serialize_item<T: TransitSerialize>(&mut self, v: &T) {
@@ -284,7 +283,7 @@ impl TransitTaggedArraySerializer for JsonTagArraySerializer {
     }
 }
 
-impl TransitTaggedMapSerializer for JsonTagMapSerializer {
+impl TransitTaggedMapSerializer for JsonTaggedMapSerializer {
     type Output = JsVal;
 
     fn serialize_pair<K: TransitSerialize, V: TransitSerialize>(&mut self, k: &K, v: &V) {
@@ -365,6 +364,45 @@ mod test {
 
         let tr = to_transit_json(hs);
         assert_eq!(json!({"~#set": [0, 2, 4]}), tr);
+    }
+
+    #[test]
+    fn custom_struct() {
+        struct Test {
+            yolo: &'static str,
+            swag: i32,
+        }
+
+        impl TransitSerialize for Test {
+            fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output {
+                let mut ser = serializer.serialize_tagged_map("~#test", Some(2));
+                ser.serialize_pair(&"yolo", &self.yolo);
+                ser.serialize_pair(&"swag", &self.swag);
+                ser.end()
+            }
+            fn transit_serialize_key<KS: TransitKeySerializer>(
+                &self,
+                serializer: &KS,
+            ) -> Option<KS::Output> {
+                None
+            }
+        }
+
+        let t = Test {
+            yolo: "test",
+            swag: -1337,
+        };
+        let tr = to_transit_json(&t);
+        assert_eq!(
+            json!({
+            "~#test":
+                {
+                    "yolo": "test",
+                    "swag": -1337
+                }
+            }),
+            tr
+        );
     }
 
     // #[test]

@@ -27,16 +27,8 @@ pub trait TransitSerializer {
 
     fn serialize_array(&self, len: Option<usize>) -> Self::ArraySerializer;
     fn serialize_map(&self, len: Option<usize>) -> Self::MapSerializer;
-    fn serialize_tagged_array(
-        &self,
-        tag: &str,
-        len: Option<usize>,
-    ) -> Self::TaggedArraySerializer;
-    fn serialize_tagged_map(
-        &self,
-        tag: &str,
-        len: Option<usize>,
-    ) -> Self::TaggedMapSerializer;
+    fn serialize_tagged_array(&self, tag: &str, len: Option<usize>) -> Self::TaggedArraySerializer;
+    fn serialize_tagged_map(&self, tag: &str, len: Option<usize>) -> Self::TaggedMapSerializer;
 
     fn serialize_array_iter<'t, T, I>(&self, v: I) -> Self::Output
     where
