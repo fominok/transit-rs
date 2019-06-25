@@ -1,7 +1,6 @@
 use super::*;
-use serde_json::{map::Map as JsMap, Value as JsVal};
-//use transit_derive::TransitSerialize;
 use itertools::Itertools;
+use serde_json::{map::Map as JsMap, Value as JsVal};
 
 pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
     v.transit_serialize(&JsonSerializer::top())
@@ -303,6 +302,7 @@ mod test {
     use super::*;
     use serde_json::json;
     use std::collections::{BTreeMap, BTreeSet};
+    use transit_derive::TransitSerialize;
 
     #[test]
     fn scalar_map_btree() {
@@ -382,7 +382,7 @@ mod test {
             }
             fn transit_serialize_key<KS: TransitKeySerializer>(
                 &self,
-                serializer: &KS,
+                _serializer: &KS,
             ) -> Option<KS::Output> {
                 None
             }
@@ -405,118 +405,116 @@ mod test {
         );
     }
 
-    // #[test]
-    // fn custom_derive_stuct_map() {
-    //     use chrono::{DateTime, TimeZone, Utc};
-    //     #[derive(Clone, TransitSerialize)]
-    //     struct User {
-    //         name: String,
-    //         related: BTreeSet<String>,
-    //         registered: DateTime<Utc>,
-    //         skills_by_rates: BTreeMap<i32, BTreeSet<String>>,
-    //     }
+    #[test]
+    fn custom_derive_stuct_map() {
+        use chrono::{DateTime, TimeZone, Utc};
+        #[derive(Clone, TransitSerialize)]
+        struct User {
+            name: String,
+            related: BTreeSet<String>,
+            registered: DateTime<Utc>,
+            skills_by_rates: BTreeMap<i32, BTreeSet<String>>,
+        }
 
-    //     let mut rel = BTreeSet::new();
-    //     rel.insert("Billy".to_owned());
-    //     rel.insert("Mark".to_owned());
-    //     rel.insert("Steve".to_owned());
+        let mut rel = BTreeSet::new();
+        rel.insert("Billy".to_owned());
+        rel.insert("Mark".to_owned());
+        rel.insert("Steve".to_owned());
 
-    //     let mut skills = BTreeMap::new();
-    //     let mut hs1 = BTreeSet::new();
-    //     hs1.insert("Linux".to_owned());
-    //     hs1.insert("Git".to_owned());
-    //     skills.insert(3, hs1);
-    //     let mut hs2 = BTreeSet::new();
-    //     hs2.insert("Performance artist".to_owned());
-    //     skills.insert(2, hs2);
-    //     let mut hs3 = BTreeSet::new();
-    //     hs3.insert("Rust".to_owned());
-    //     skills.insert(1, hs3);
+        let mut skills = BTreeMap::new();
+        let mut hs1 = BTreeSet::new();
+        hs1.insert("Linux".to_owned());
+        hs1.insert("Git".to_owned());
+        skills.insert(3, hs1);
+        let mut hs2 = BTreeSet::new();
+        hs2.insert("Performance artist".to_owned());
+        skills.insert(2, hs2);
+        let mut hs3 = BTreeSet::new();
+        hs3.insert("Rust".to_owned());
+        skills.insert(1, hs3);
 
-    //     let u = User {
-    //         name: "Van".to_owned(),
-    //         related: rel,
-    //         registered: Utc.ymd(1995, 10, 11).and_hms(0, 0, 0),
-    //         skills_by_rates: skills,
-    //     };
-    //     let tr = to_transit_json(u);
-    //     assert_eq!(
-    //         json!(
-    //             {
-    //                 "~#user": {
-    //                     "name": "Van",
-    //                     "related": {"~#set": ["Billy", "Mark", "Steve"]},
-    //                     "registered": "~t1995-10-11T00:00:00Z",
-    //                     "skills_by_rates": {
-    //                         "~i3": {"~#set": ["Git", "Linux"]},
-    //                         "~i2": {"~#set": ["Performance artist"]},
-    //                         "~i1": {"~#set": ["Rust"]},
-    //                     }
-    //                 }
-    //             }
-    //         ),
-    //         tr
-    //     );
-    // }
+        let u = User {
+            name: "Van".to_owned(),
+            related: rel,
+            registered: Utc.ymd(1995, 10, 11).and_hms(0, 0, 0),
+            skills_by_rates: skills,
+        };
+        let tr = to_transit_json(u);
+        assert_eq!(
+            json!(
+                {
+                    "~#user": {
+                        "name": "Van",
+                        "related": {"~#set": ["Billy", "Mark", "Steve"]},
+                        "registered": "~t1995-10-11T00:00:00Z",
+                        "skills_by_rates": {
+                            "~i3": {"~#set": ["Git", "Linux"]},
+                            "~i2": {"~#set": ["Performance artist"]},
+                            "~i1": {"~#set": ["Rust"]},
+                        }
+                    }
+                }
+            ),
+            tr
+        );
+    }
 
-    // #[test]
-    // fn custom_derive_stuct_tuple() {
-    //     #[derive(Clone, TransitSerialize)]
-    //     struct Point(i32, i32);
-    //     let p = Point(13, 37);
+    #[test]
+    fn custom_derive_stuct_tuple() {
+        #[derive(Clone, TransitSerialize)]
+        struct Point(i32, i32);
+        let p = Point(13, 37);
 
-    //     let tr = to_transit_json(p);
-    //     assert_eq!(json!({"~#point": [13, 37]}), tr);
-    // }
+        let tr = to_transit_json(p);
+        assert_eq!(json!({"~#point": [13, 37]}), tr);
+    }
 
-    // #[test]
-    // fn custom_derive_enum() {
-    //     #[derive(Clone, TransitSerialize)]
-    //     enum Event {
-    //         TemperatureChanged { room_name: String, temperature: i32 },
-    //         MotionDetected { room_name: String },
-    //         GoneOnline(String),
-    //         GoneOffline(String),
-    //         LightsStatus { room_names: Vec<String> },
-    //     }
+    #[test]
+    fn custom_derive_enum() {
+        #[derive(Clone, TransitSerialize)]
+        enum Event {
+            TemperatureChanged { room_name: String, temperature: i32 },
+            GoneOffline(String),
+            LightsStatus { room_names: Vec<String> },
+        }
 
-    //     let e1 = Event::TemperatureChanged {
-    //         room_name: "Kitchen".to_owned(),
-    //         temperature: 32,
-    //     };
-    //     let tr1 = to_transit_json(e1);
-    //     assert_eq!(
-    //         json!(
-    //         {
-    //             "~#temperaturechanged": {
-    //                 "room_name": "Kitchen",
-    //                 "temperature": 32
-    //             }
-    //         }),
-    //         tr1
-    //     );
+        let e1 = Event::TemperatureChanged {
+            room_name: "Kitchen".to_owned(),
+            temperature: 32,
+        };
+        let tr1 = to_transit_json(e1);
+        assert_eq!(
+            json!(
+            {
+                "~#temperaturechanged": {
+                    "room_name": "Kitchen",
+                    "temperature": 32
+                }
+            }),
+            tr1
+        );
 
-    //     let e2 = Event::GoneOffline("device".to_owned());
-    //     let tr2 = to_transit_json(e2);
-    //     assert_eq!(
-    //         json!(
-    //         {
-    //             "~#goneoffline": ["device"]
-    //         }),
-    //         tr2
-    //     );
+        let e2 = Event::GoneOffline("device".to_owned());
+        let tr2 = to_transit_json(e2);
+        assert_eq!(
+            json!(
+            {
+                "~#goneoffline": ["device"]
+            }),
+            tr2
+        );
 
-    //     let names = vec!["test1".to_owned(), "test2".to_owned()];
-    //     let e3 = Event::LightsStatus { room_names: names };
-    //     let tr3 = to_transit_json(e3);
-    //     assert_eq!(
-    //         json!(
-    //         {
-    //             "~#lightsstatus": { "room_names": ["test1", "test2"] }
-    //         }),
-    //         tr3
-    //     );
-    // }
+        let names = vec!["test1".to_owned(), "test2".to_owned()];
+        let e3 = Event::LightsStatus { room_names: names };
+        let tr3 = to_transit_json(e3);
+        assert_eq!(
+            json!(
+            {
+                "~#lightsstatus": { "room_names": ["test1", "test2"] }
+            }),
+            tr3
+        );
+    }
 
     #[test]
     fn array() {

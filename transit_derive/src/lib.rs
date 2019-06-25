@@ -13,12 +13,12 @@ pub fn transit_macro_derive(input: proc_macro::TokenStream) -> proc_macro::Token
 fn put_serialize_struct_body(name: &Ident, body: TokenStream) -> TokenStream {
     quote! {
         impl TransitSerialize for #name {
-           fn transit_serialize<S: TransitSerializer>(&self, serializer: S)
-                -> TransitType<S::Output> {
+           fn transit_serialize<S: TransitSerializer>(&self, serializer: &S)
+                -> S::Output {
                 #body
             }
-            fn transit_serialize_key<S: TransitSerializer>(&self, serializer: S)
-                -> Option<S::Output> {
+            fn transit_serialize_key<KS: TransitKeySerializer>(&self, serializer: &KS)
+                -> Option<KS::Output> {
                 None
             }
         }
@@ -67,16 +67,16 @@ fn process_struct_unnamed(name: &Ident, tag: String, fields: &syn::FieldsUnnamed
 fn process_enum(name: &Ident, variants: &[TokenStream]) -> TokenStream {
     quote! {
         impl TransitSerialize for #name {
-            fn transit_serialize<S: TransitSerializer>(&self, serializer: S) -> TransitType<S::Output> {
+            fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output {
                 match self {
                     #(#variants),*
                 }
             }
 
-            fn transit_serialize_key<S: TransitSerializer>(
+            fn transit_serialize_key<KS: TransitKeySerializer>(
                 &self,
-                serializer: S,
-            ) -> Option<S::Output> {
+                serializer: &KS,
+            ) -> Option<KS::Output> {
                 None
             }
         }
