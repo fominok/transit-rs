@@ -32,10 +32,10 @@ Examples are located in `ser/json_verbose.rs` file within `test` module.
   - [ ] API
   - [ ] Standard types implementation
   - [ ] JSON (Verbose)
-    - [ ] Serializer
+    - [ ] Deserializer
     - [ ] Derive macro
   - [ ] JSON (Non-verbose/caching)
-    - [ ] Serializer
+    - [ ] Deserializer
     - [ ] Derive macro
 - [ ] MessagePack?
 
