@@ -1,6 +1,6 @@
 mod impls;
 pub mod json_verbose;
-//pub mod json;
+pub mod json;
 
 pub trait TransitSerialize {
     fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output;
