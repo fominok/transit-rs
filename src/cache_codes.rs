@@ -1,4 +1,4 @@
-use std::collections::{HashMap, hash_map};
+use std::collections::{hash_map, HashMap};
 use std::convert::TryFrom;
 
 const CACHE_CODE_DIGITS: u8 = 44;
@@ -36,23 +36,15 @@ pub(crate) struct KeyCacher<'a> {
 }
 
 impl<'a> KeyCacher<'a> {
-    pub(crate) fn cache(&'a mut self, s: &'a str) -> &'a str {
+    pub(crate) fn cache<'b>(&'b mut self, s: &'a str) -> &'b str {
         match self.map.entry(s) {
             hash_map::Entry::Occupied(e) => e.into_mut(),
             hash_map::Entry::Vacant(e) => {
-               let code = self.numbers_iter.next().expect("Too many keys to cache");
+                let code = self.numbers_iter.next().expect("Too many keys to cache");
                 e.insert(code);
                 s
-            },
+            }
         }
-        // self.map.entry(s).or_insert_with()
-        // if let Some(code) = self.map.get(s) {
-        //     code
-        // } else {
-        //     let code = self.numbers_iter.next().expect("Too many keys to cache");
-        //     self.map.insert(s, code);
-        //     s
-        // }
     }
 
     pub(crate) fn new() -> Self {
@@ -70,37 +62,61 @@ mod test {
     #[test]
     fn single_digit() {
         let mut cacher = KeyCacher::new();
-        assert_eq!(cacher.cache("test1"), "test1");
-        assert_eq!(cacher.cache("test2"), "test2");
-        assert_eq!(cacher.cache("test3"), "test3");
-        assert_eq!(cacher.cache("test4"), "test4");
-        assert_eq!(cacher.cache("test5"), "test5");
-        assert_eq!(cacher.cache("test6"), "test6");
-        assert_eq!(cacher.cache("test7"), "test7");
-        assert_eq!(cacher.cache("test8"), "test8");
-        assert_eq!(cacher.cache("test9"), "test9");
-        assert_eq!(cacher.cache("test10"), "test10");
-        assert_eq!(cacher.cache("test11"), "test11");
+        // Here is how it will be used:
+        // There is data that will outlive cacher;
+        // Returned references from cacher will be dropped before next call;
+        let data = vec![
+            "test1".to_owned(),
+            "test2".to_owned(),
+            "test3".to_owned(),
+            "test4".to_owned(),
+            "test5".to_owned(),
+            "test6".to_owned(),
+            "test7".to_owned(),
+            "test8".to_owned(),
+            "test9".to_owned(),
+            "test10".to_owned(),
+            "test11".to_owned(),
+            "test12".to_owned(),
+        ];
 
-        assert_eq!(cacher.cache("test5"), "^4");
-        assert_eq!(cacher.cache("test6"), "^5");
+        assert_eq!(cacher.cache(&data[0]), "test1");
+        assert_eq!(cacher.cache(&data[1]), "test2");
+        assert_eq!(cacher.cache(&data[2]), "test3");
+        assert_eq!(cacher.cache(&data[3]), "test4");
+        assert_eq!(cacher.cache(&data[4]), "test5");
+        assert_eq!(cacher.cache(&data[5]), "test6");
+        assert_eq!(cacher.cache(&data[6]), "test7");
+        assert_eq!(cacher.cache(&data[7]), "test8");
+        assert_eq!(cacher.cache(&data[8]), "test9");
+        assert_eq!(cacher.cache(&data[9]), "test10");
+        assert_eq!(cacher.cache(&data[10]), "test11");
 
-        assert_eq!(cacher.cache("test12"), "test12");
+        assert_eq!(cacher.cache(&data[4]), "^4");
+        assert_eq!(cacher.cache(&data[5]), "^5");
+
+        assert_eq!(cacher.cache(&data[11]), "test12");
     }
 
-    // #[test]
-    // fn two_digits() {
-    //     let mut cacher = KeyCacher::new();
-    //     for i in 0..CACHE_CODE_DIGITS {
-    //         cacher.cache(&format!("test{}", i));
-    //     }
+    #[test]
+    fn two_digits() {
+        let mut cacher = KeyCacher::new();
+        let mut data = Vec::with_capacity(CACHE_CODE_DIGITS as usize);
+        for i in 0..CACHE_CODE_DIGITS {
+            data.push(format!("test{}", i));
+        }
+        // mutable borrows for `data` end here
+        for i in 0..CACHE_CODE_DIGITS {
+            cacher.cache(&data[i as usize]);
+        }
 
-    //     assert_eq!(cacher.cache("another one"), "another one");
-    //     assert_eq!(cacher.cache("another one"), "^10");
-    //     assert_eq!(cacher.cache("another two"), "another two");
+        // 'static slices will outlive anyways
+        assert_eq!(cacher.cache("another one"), "another one");
+        assert_eq!(cacher.cache("another one"), "^10");
+        assert_eq!(cacher.cache("another two"), "another two");
 
-    //     assert_eq!(cacher.cache("another one"), "^10");
-    //     assert_eq!(cacher.cache("another one"), "^10");
-    //     assert_eq!(cacher.cache("another two"), "^11");
-    // }
+        assert_eq!(cacher.cache("another one"), "^10");
+        assert_eq!(cacher.cache("another one"), "^10");
+        assert_eq!(cacher.cache("another two"), "^11");
+    }
 }
