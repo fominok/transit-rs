@@ -1,6 +1,9 @@
 use super::*;
+use crate::cache_codes::KeyCacher;
 use itertools::Itertools;
 use serde_json::Value as JsVal;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
     v.transit_serialize(&JsonSerializer::top())
@@ -8,17 +11,23 @@ pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
 
 struct JsonSerializer {
     top_level: bool,
-}
-
-impl Default for JsonSerializer {
-    fn default() -> Self {
-        JsonSerializer { top_level: false }
-    }
+    cacher: Rc<RefCell<KeyCacher<'static>>>,
 }
 
 impl JsonSerializer {
     fn top() -> Self {
-        JsonSerializer { top_level: true }
+        let cacher = KeyCacher::new();
+        JsonSerializer {
+            top_level: true,
+            cacher: Rc::new(RefCell::new(cacher)),
+        }
+    }
+
+    fn build_child(&self) -> Self {
+        JsonSerializer {
+            top_level: false,
+            cacher: self.cacher.clone(),
+        }
     }
 
     fn quote_check(&self, v: JsVal) -> JsVal {
@@ -61,7 +70,7 @@ impl TransitSerializer for JsonSerializer {
     }
 
     fn serialize_array(&self, len: Option<usize>) -> Self::ArraySerializer {
-        let inner = Self::default();
+        let inner = self.build_child();
         if let Some(len) = len {
             JsonArraySerializer {
                 buf: Vec::with_capacity(len),
@@ -77,7 +86,7 @@ impl TransitSerializer for JsonSerializer {
     }
 
     fn serialize_map(&self, len: Option<usize>) -> Self::MapSerializer {
-        let inner = Self::default();
+        let inner = self.build_child();
         if let Some(len) = len {
             JsonMapSerializer {
                 buf_keys: Vec::with_capacity(len),
@@ -114,7 +123,7 @@ impl TransitSerializer for JsonSerializer {
         T: TransitSerialize + 't,
         I: Iterator<Item = &'t T>,
     {
-        let serializer = Self::default();
+        let serializer = self.build_child();
         let v_ser = v.map(|x| x.transit_serialize(&serializer)).collect();
         JsVal::Array(v_ser)
     }
@@ -125,7 +134,7 @@ impl TransitSerializer for JsonSerializer {
         V: TransitSerialize + 't,
         I: Iterator<Item = (&'t K, &'t V)>,
     {
-        let serializer = Self::default();
+        let serializer = self.build_child();
         let mut has_comp_key = false;
         let (ser_k, ser_v): (Vec<JsVal>, Vec<JsVal>) = v
             .map(|(key, value)| {
@@ -465,5 +474,32 @@ mod test {
         let tr = to_transit_json(hm);
 
         assert_eq!(json!(["^", "~_", 1337]), tr);
+    }
+
+    #[test]
+    fn maps_key_caching() {
+        let mut hm1 = BTreeMap::new();
+        let mut hm2 = BTreeMap::new();
+        let mut hm3 = BTreeMap::new();
+
+        hm1.insert("key1", "one");
+        hm1.insert("key2", "two");
+        hm2.insert("ayy", "lmao");
+        hm2.insert("key1", "three");
+        hm2.insert("key2", "four");
+        hm3.insert("key1", "five");
+        hm3.insert("key2", "six");
+
+        let v = vec![hm1, hm2, hm3];
+
+        let tr = to_transit_json(v);
+        assert_eq!(
+            json!([
+                ["^", "key1", "one", "key2", "two"],
+                ["^", "ayy", "lmao", "^0", "three", "^1", "four"],
+                ["^", "^0", "five", "^1", "six"],
+            ]),
+            tr
+        );
     }
 }
