@@ -1,6 +1,6 @@
 use super::*;
 use itertools::Itertools;
-use serde_json::{map::Map as JsMap, Value as JsVal};
+use serde_json::Value as JsVal;
 
 pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
     v.transit_serialize(&JsonSerializer::top())
@@ -20,12 +20,13 @@ impl JsonSerializer {
     fn top() -> Self {
         JsonSerializer { top_level: true }
     }
-    
+
     fn quote_check(&self, v: JsVal) -> JsVal {
         if self.top_level {
-            let mut m = JsMap::with_capacity(1);
-            m.insert("~#".to_owned(), v);
-            JsVal::Object(m)
+            let mut m = Vec::with_capacity(1);
+            m.push(JsVal::String("~#".to_owned()));
+            m.push(v);
+            JsVal::Array(m)
         } else {
             v
         }
@@ -146,20 +147,18 @@ impl TransitSerializer for JsonSerializer {
 
         if has_comp_key {
             let interleaved: Vec<JsVal> = ser_k.into_iter().interleave(ser_v).collect();
-            let mut m = JsMap::with_capacity(1);
-            m.insert("~#cmap".to_owned(), JsVal::Array(interleaved));
-            JsVal::Object(m)
+            let mut m = Vec::with_capacity(2);
+            m.push(JsVal::String("~#cmap".to_owned()));
+            m.push(JsVal::Array(interleaved));
+            JsVal::Array(m)
         } else {
-            let mut m = JsMap::with_capacity(ser_k.len());
+            let mut m = Vec::with_capacity(ser_k.len() + 1);
+            m.push(JsVal::String("^".to_owned())); // FIXME: make it static
             for (key, value) in ser_k.into_iter().zip(ser_v) {
-                m.insert(
-                    key.as_str()
-                        .expect("Scalar keys are always strings")
-                        .to_owned(),
-                    value,
-                );
+                m.push(key);
+                m.push(value);
             }
-            JsVal::Object(m)
+            JsVal::Array(m)
         }
     }
 
@@ -169,9 +168,10 @@ impl TransitSerializer for JsonSerializer {
         I: Iterator<Item = &'t T>,
     {
         let v_ser = self.serialize_array_iter(v);
-        let mut m = JsMap::with_capacity(1);
-        m.insert(tag.to_owned(), v_ser);
-        JsVal::Object(m)
+        let mut m = Vec::with_capacity(2);
+        m.push(JsVal::String(tag.to_owned()));
+        m.push(v_ser);
+        JsVal::Array(m)
     }
 
     fn serialize_tagged_map_iter<'t, K, V, I>(&self, tag: &str, v: I) -> Self::Output
@@ -181,9 +181,10 @@ impl TransitSerializer for JsonSerializer {
         I: Iterator<Item = (&'t K, &'t V)>,
     {
         let m_ser = self.serialize_map_iter(v);
-        let mut m = JsMap::with_capacity(1);
-        m.insert(tag.to_owned(), m_ser);
-        JsVal::Object(m)
+        let mut m = Vec::with_capacity(2);
+        m.push(JsVal::String(tag.to_owned()));
+        m.push(m_ser);
+        JsVal::Array(m)
     }
 }
 
@@ -229,20 +230,18 @@ impl TransitMapSerializer for JsonMapSerializer {
                 .into_iter()
                 .interleave(self.buf_vals)
                 .collect();
-            let mut m = JsMap::with_capacity(1);
-            m.insert("~#cmap".to_owned(), JsVal::Array(interleaved));
-            JsVal::Object(m)
+            let mut m = Vec::with_capacity(2);
+            m.push(JsVal::String("~#cmap".to_owned()));
+            m.push(JsVal::Array(interleaved));
+            JsVal::Array(m)
         } else {
-            let mut m = JsMap::with_capacity(self.buf_keys.len());
+            let mut m = Vec::with_capacity(self.buf_keys.len() + 1);
+            m.push(JsVal::String("^".to_owned()));
             for (key, value) in self.buf_keys.into_iter().zip(self.buf_vals) {
-                m.insert(
-                    key.as_str()
-                        .expect("Scalar keys are always strings")
-                        .to_owned(),
-                    value,
-                );
+                m.push(key);
+                m.push(value);
             }
-            JsVal::Object(m)
+            JsVal::Array(m)
         }
     }
 }
@@ -277,9 +276,10 @@ impl TransitTaggedArraySerializer for JsonTaggedArraySerializer {
 
     fn end(self) -> Self::Output {
         let val = self.array_serializer.end();
-        let mut m = JsMap::with_capacity(1);
-        m.insert(self.tag, val);
-        JsVal::Object(m)
+        let mut m = Vec::with_capacity(2);
+        m.push(JsVal::String(self.tag));
+        m.push(val);
+        JsVal::Array(m)
     }
 }
 
@@ -292,9 +292,10 @@ impl TransitTaggedMapSerializer for JsonTaggedMapSerializer {
 
     fn end(self) -> Self::Output {
         let val = self.map_serializer.end();
-        let mut m = JsMap::with_capacity(1);
-        m.insert(self.tag, val);
-        JsVal::Object(m)
+        let mut m = Vec::with_capacity(2);
+        m.push(JsVal::String(self.tag));
+        m.push(val);
+        JsVal::Array(m)
     }
 }
 
@@ -345,6 +346,85 @@ mod test {
 
         let tr = to_transit_json(hs);
         assert_eq!(json!(["~#set", [0, 2, 4]]), tr);
+    }
+
+    #[test]
+    fn custom_struct_map() {
+        struct Test {
+            yolo: &'static str,
+            swag: i32,
+        }
+
+        impl TransitSerialize for Test {
+            fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output {
+                let mut ser = serializer.serialize_tagged_map("~#test", Some(2));
+                ser.serialize_pair(&"yolo", &self.yolo);
+                ser.serialize_pair(&"swag", &self.swag);
+                ser.end()
+            }
+            fn transit_serialize_key<KS: TransitKeySerializer>(
+                &self,
+                _serializer: &KS,
+            ) -> Option<KS::Output> {
+                None
+            }
+        }
+
+        let t = Test {
+            yolo: "test",
+            swag: -1337,
+        };
+        let tr = to_transit_json(&t);
+        assert_eq!(json!(["~#test", ["^", "yolo", "test", "swag", -1337]]), tr);
+    }
+
+    #[test]
+    fn custom_struct_array() {
+        struct Point(i32, i32);
+
+        impl TransitSerialize for Point {
+            fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output {
+                let mut ser = serializer.serialize_tagged_array("~#point", Some(2));
+                ser.serialize_item(&self.0);
+                ser.serialize_item(&self.1);
+                ser.end()
+            }
+            fn transit_serialize_key<KS: TransitKeySerializer>(
+                &self,
+                _serializer: &KS,
+            ) -> Option<KS::Output> {
+                None
+            }
+        }
+
+        let p = Point(-13, 37);
+        let tr = to_transit_json(&p);
+        assert_eq!(json!(["~#point", [-13, 37]]), tr);
+    }
+
+    #[test]
+    fn custom_struct_map_wrapper() {
+        struct Strange(BTreeMap<&'static str, i32>);
+
+        impl TransitSerialize for Strange {
+            fn transit_serialize<S: TransitSerializer>(&self, serializer: &S) -> S::Output {
+                serializer.serialize_tagged_map_iter("~#strange", self.0.iter())
+            }
+            fn transit_serialize_key<KS: TransitKeySerializer>(
+                &self,
+                _serializer: &KS,
+            ) -> Option<KS::Output> {
+                None
+            }
+        }
+
+        let mut m = BTreeMap::new();
+        m.insert("swag", 13);
+        m.insert("yolo", 37);
+
+        let s = Strange(m);
+        let tr = to_transit_json(&s);
+        assert_eq!(json!(["~#strange", ["^", "swag", 13, "yolo", 37]]), tr);
     }
 
     #[test]
