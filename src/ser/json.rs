@@ -176,9 +176,15 @@ impl TransitSerializer for JsonSerializer {
         T: TransitSerialize + 't,
         I: Iterator<Item = &'t T>,
     {
+        let cached_tag = self
+            .cacher
+            .borrow_mut()
+            .cache(tag.to_owned())
+            .unwrap_or(tag)
+            .to_owned();
         let v_ser = self.serialize_array_iter(v);
         let mut m = Vec::with_capacity(2);
-        m.push(JsVal::String(tag.to_owned()));
+        m.push(JsVal::String(cached_tag));
         m.push(v_ser);
         JsVal::Array(m)
     }
@@ -189,9 +195,15 @@ impl TransitSerializer for JsonSerializer {
         V: TransitSerialize + 't,
         I: Iterator<Item = (&'t K, &'t V)>,
     {
+        let cached_tag = self
+            .cacher
+            .borrow_mut()
+            .cache(tag.to_owned())
+            .unwrap_or(tag)
+            .to_owned();
         let m_ser = self.serialize_map_iter(v);
         let mut m = Vec::with_capacity(2);
-        m.push(JsVal::String(tag.to_owned()));
+        m.push(JsVal::String(cached_tag));
         m.push(m_ser);
         JsVal::Array(m)
     }
@@ -389,7 +401,7 @@ mod test {
     }
 
     #[test]
-    fn custom_struct_array() {
+    fn custom_struct_array_caching() {
         struct Point(i32, i32);
 
         impl TransitSerialize for Point {
@@ -407,9 +419,9 @@ mod test {
             }
         }
 
-        let p = Point(-13, 37);
-        let tr = to_transit_json(&p);
-        assert_eq!(json!(["~#point", [-13, 37]]), tr);
+        let vp = vec![Point(-13, 37), Point(3, 22)];
+        let tr = to_transit_json(&vp);
+        assert_eq!(json!([["~#point", [-13, 37]], ["^0", [3, 22]],]), tr);
     }
 
     #[test]
