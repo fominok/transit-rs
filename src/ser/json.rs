@@ -11,7 +11,7 @@ pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
 
 struct JsonSerializer {
     top_level: bool,
-    cacher: Rc<RefCell<KeyCacher<'static>>>,
+    cacher: Rc<RefCell<KeyCacher>>,
 }
 
 impl JsonSerializer {
@@ -201,7 +201,8 @@ impl TransitKeySerializer for JsonSerializer {
     type Output = String;
 
     fn serialize_key(&self, v: &str) -> Self::Output {
-        v.to_owned()
+        let mut cacher = self.cacher.borrow_mut();
+        cacher.cache(v.to_owned()).unwrap_or(v).to_owned()
     }
 }
 
@@ -498,6 +499,35 @@ mod test {
                 ["^", "key1", "one", "key2", "two"],
                 ["^", "ayy", "lmao", "^0", "three", "^1", "four"],
                 ["^", "^0", "five", "^1", "six"],
+            ]),
+            tr
+        );
+    }
+
+    #[test]
+    fn tags_caching_deep() {
+        let mut s1 = BTreeSet::new();
+        let mut s2 = BTreeSet::new();
+
+        let mut hm1 = BTreeMap::new();
+        let mut hm2 = BTreeMap::new();
+
+        hm1.insert("key1", "one");
+        hm1.insert("key2", "two");
+        hm2.insert("ayy", "lmao");
+        hm2.insert("key1", "three");
+        hm2.insert("key2", "four");
+
+        s1.insert(hm1);
+        s2.insert(hm2);
+
+        let v = vec![s1, s2];
+
+        let tr = to_transit_json(v);
+        assert_eq!(
+            json!([
+                ["~#set", [["^", "key1", "one", "key2", "two"]]],
+                ["^0", [["^", "ayy", "lmao", "^1", "three", "^2", "four"]]],
             ]),
             tr
         );
