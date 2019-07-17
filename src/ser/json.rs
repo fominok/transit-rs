@@ -11,22 +11,18 @@ pub fn to_transit_json<T: TransitSerialize>(v: T) -> JsVal {
 
 struct JsonSerializer {
     top_level: bool,
-    cacher: Rc<RefCell<KeyCacher>>,
 }
 
 impl JsonSerializer {
     fn top() -> Self {
-        let cacher = KeyCacher::new();
         JsonSerializer {
             top_level: true,
-            cacher: Rc::new(RefCell::new(cacher)),
         }
     }
 
     fn build_child(&self) -> Self {
         JsonSerializer {
             top_level: false,
-            cacher: self.cacher.clone(),
         }
     }
 
@@ -162,7 +158,7 @@ impl TransitSerializer for JsonSerializer {
             JsVal::Array(m)
         } else {
             let mut m = Vec::with_capacity(ser_k.len() + 1);
-            m.push(JsVal::String("^".to_owned())); // FIXME: make it static
+            m.push(JsVal::String("^".to_owned()));
             for (key, value) in ser_k.into_iter().zip(ser_v) {
                 m.push(key);
                 m.push(value);
@@ -176,15 +172,9 @@ impl TransitSerializer for JsonSerializer {
         T: TransitSerialize + 't,
         I: Iterator<Item = &'t T>,
     {
-        let cached_tag = self
-            .cacher
-            .borrow_mut()
-            .cache(tag.to_owned())
-            .unwrap_or(tag)
-            .to_owned();
         let v_ser = self.serialize_array_iter(v);
         let mut m = Vec::with_capacity(2);
-        m.push(JsVal::String(cached_tag));
+        m.push(JsVal::String(tag.to_owned()));
         m.push(v_ser);
         JsVal::Array(m)
     }
@@ -195,15 +185,9 @@ impl TransitSerializer for JsonSerializer {
         V: TransitSerialize + 't,
         I: Iterator<Item = (&'t K, &'t V)>,
     {
-        let cached_tag = self
-            .cacher
-            .borrow_mut()
-            .cache(tag.to_owned())
-            .unwrap_or(tag)
-            .to_owned();
         let m_ser = self.serialize_map_iter(v);
         let mut m = Vec::with_capacity(2);
-        m.push(JsVal::String(cached_tag));
+        m.push(JsVal::String(tag.to_owned()));
         m.push(m_ser);
         JsVal::Array(m)
     }
@@ -213,8 +197,7 @@ impl TransitKeySerializer for JsonSerializer {
     type Output = String;
 
     fn serialize_key(&self, v: &str) -> Self::Output {
-        let mut cacher = self.cacher.borrow_mut();
-        cacher.cache(v.to_owned()).unwrap_or(v).to_owned()
+        v.to_owned()
     }
 }
 
